@@ -1,0 +1,415 @@
+<?php
+/**
+ * gestionar-inscriptos.blade.php
+ *
+ * Panel de administración de inscriptos por llamado.
+ * Permite al admin:
+ *   - Ver listado de inscriptos
+ *   - Cambiar estado (pendiente / habilitado / sin_clasificar)
+ *   - Asignar puntaje y orden
+ *   - Editar observaciones
+ *   - Disparar la generación del PDF
+ *
+ * Se incluye en crear.blade.php dentro del modal de edición o como
+ * panel propio accesible desde la columna Acciones del historial.
+ *
+ * Uso: @livewire('gestionar-inscriptos', ['llamadoId' => $item->id])
+ */
+use Livewire\Attributes\On;
+use Livewire\Volt\Component;
+use Illuminate\Support\Facades\DB;
+
+
+new class extends Component {
+
+    public int    $llamadoId     = 0;
+    public bool   $modalAbierto  = false;
+    public $llamadoInfo          = null;
+
+    // Lista de inscriptos del llamado actual
+    public array  $inscriptos    = [];
+
+    // Edición inline
+    public ?int   $editandoId    = null;
+    public string $editEstado    = 'pendiente';
+    public string $editPuntaje   = '';
+    public string $editOrden     = '';
+    public string $editObs       = '';
+
+    // Mensaje de estado
+    public string $mensaje       = '';
+    public string $mensajeTipo   = ''; // 'ok' | 'err'
+
+    /* ── ABRIR PANEL ──────────────────────────────────────────────── */
+  
+    #[On('abrirPanel')]
+    public function abrirPanel(int $id): void
+    {
+        $this->llamadoId  = $id;
+        $this->modalAbierto = true;
+        $this->mensaje    = '';
+        $this->editandoId = null;
+        $this->cargarInscriptos();
+        $this->cargarInfoLlamado();
+    }
+
+    private function cargarInfoLlamado(): void
+    {
+        $this->llamadoInfo = DB::table('nuevo_llamado')
+            ->leftJoin('tipo_llamado', 'nuevo_llamado.idtipo_llamado', '=', 'tipo_llamado.id')
+            ->leftJoin('tb_zona',      'nuevo_llamado.idtb_zona',      '=', 'tb_zona.id')
+            ->where('nuevo_llamado.id', $this->llamadoId)
+            ->select(
+                'nuevo_llamado.id',
+                'tipo_llamado.nombre as tipo_nombre',
+                'tb_zona.nombre_zona',
+                'nuevo_llamado.idtb_tipoestado'
+            )
+            ->first();
+    }
+
+    private function cargarInscriptos(): void
+    {
+        $this->inscriptos = DB::table('inscripciones_llamado')
+            ->where('llamado_id', $this->llamadoId)
+            ->orderByRaw("FIELD(estado, 'habilitado', 'pendiente', 'sin_clasificar')")
+            ->orderByDesc('puntaje')
+            ->orderBy('apellido')
+            ->get()
+            ->toArray();
+    }
+
+    /* ── INICIAR EDICIÓN INLINE ───────────────────────────────────── */
+    public function editarInscripto(int $id): void
+    {
+        $ins = collect($this->inscriptos)->firstWhere('id', $id);
+        if (!$ins) return;
+
+        $ins = (object) $ins;
+        $this->editandoId  = $id;
+        $this->editEstado  = $ins->estado;
+        $this->editPuntaje = $ins->puntaje  ?? '';
+        $this->editOrden   = $ins->orden    ?? '';
+        $this->editObs     = $ins->observaciones ?? '';
+    }
+
+    /* ── GUARDAR EDICIÓN ──────────────────────────────────────────── */
+    public function guardarEdicion(): void
+    {
+        $this->validate([
+            'editEstado'  => 'required|in:pendiente,habilitado,sin_clasificar',
+            'editPuntaje' => 'nullable|numeric|min:0|max:100',
+            'editOrden'   => 'nullable|integer|min:1',
+            'editObs'     => 'nullable|max:500',
+        ], [
+            'editEstado.in'       => 'Estado no válido.',
+            'editPuntaje.numeric' => 'El puntaje debe ser un número.',
+            'editPuntaje.max'     => 'El puntaje máximo es 100.',
+        ]);
+
+        DB::table('inscripciones_llamado')
+            ->where('id', $this->editandoId)
+            ->update([
+                'estado'        => $this->editEstado,
+                'puntaje'       => $this->editPuntaje !== '' ? (float) $this->editPuntaje : null,
+                'orden'         => $this->editOrden   !== '' ? (int)   $this->editOrden   : null,
+                'observaciones' => trim($this->editObs) ?: null,
+                'updated_at'    => now(),
+            ]);
+
+        $this->editandoId = null;
+        $this->setMensaje('ok', 'Inscripto actualizado correctamente.');
+        $this->cargarInscriptos();
+    }
+
+    /* ── CANCELAR EDICIÓN ─────────────────────────────────────────── */
+    public function cancelarEdicion(): void
+    {
+        $this->editandoId = null;
+    }
+
+    /* ── ELIMINAR INSCRIPTO ───────────────────────────────────────── */
+    public function eliminarInscripto(int $id): void
+    {
+        DB::table('inscripciones_llamado')->where('id', $id)->delete();
+        $this->setMensaje('ok', 'Inscripto eliminado.');
+        $this->cargarInscriptos();
+    }
+
+    /* ── CERRAR PANEL ─────────────────────────────────────────────── */
+    public function cerrarPanel(): void
+    {
+        $this->modalAbierto = false;
+        $this->editandoId   = null;
+    }
+
+    /* ── HELPER MENSAJE ───────────────────────────────────────────── */
+    private function setMensaje(string $tipo, string $texto): void
+    {
+        $this->mensajeTipo = $tipo;
+        $this->mensaje     = $texto;
+    }
+
+    /* ── ESTADÍSTICAS RÁPIDAS ─────────────────────────────────────── */
+    public function getStatsProperty(): array
+    {
+        $todos  = collect($this->inscriptos);
+        return [
+            'total'         => $todos->count(),
+            'habilitados'   => $todos->where('estado', 'habilitado')->count(),
+            'pendientes'    => $todos->where('estado', 'pendiente')->count(),
+            'sin_clasificar'=> $todos->where('estado', 'sin_clasificar')->count(),
+        ];
+    }
+};
+?>
+
+<div>
+    {{-- ╔══════════════════════════════════════════════════════════════╗
+         ║  PANEL MODAL DE GESTIÓN DE INSCRIPTOS                       ║
+         ╚══════════════════════════════════════════════════════════════╝ --}}
+    @if($modalAbierto)
+    <div
+        class="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 backdrop-blur-sm"
+        x-data
+        x-on:keydown.escape.window="$wire.cerrarPanel()"
+    >
+        <div class="bg-white rounded-2xl shadow-2xl w-full max-w-5xl mx-4 flex flex-col max-h-[92vh]">
+
+            {{-- ── HEADER ────────────────────────────────────────────── --}}
+            <div class="flex items-center justify-between px-6 py-4 border-b shrink-0 bg-slate-800 rounded-t-2xl">
+                <div>
+                    <h2 class="text-base font-black text-white uppercase tracking-tight">
+                        Gestión de Inscriptos
+                    </h2>
+                    @if($llamadoInfo)
+                    <p class="text-xs text-slate-300 mt-0.5">
+                        Llamado #{{ $llamadoInfo->id }}
+                        @if($llamadoInfo->tipo_nombre) · {{ $llamadoInfo->tipo_nombre }} @endif
+                        @if($llamadoInfo->nombre_zona)  · {{ $llamadoInfo->nombre_zona }}  @endif
+                    </p>
+                    @endif
+                </div>
+                <div class="flex items-center gap-3">
+                    {{-- Botón PDF --}}
+                    <a
+                        href="{{ route('admin.llamados.pdf', $llamadoId) }}"
+                        target="_blank"
+                        class="flex items-center gap-2 bg-red-600 hover:bg-red-700 text-white font-black px-4 py-2 rounded-lg text-xs uppercase shadow-md transition"
+                    >
+                        <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                            <path fill-rule="evenodd" d="M4 4a2 2 0 012-2h4.586A2 2 0 0112 2.586L15.414 6A2 2 0 0116 7.414V16a2 2 0 01-2 2H6a2 2 0 01-2-2V4z" clip-rule="evenodd"/>
+                        </svg>
+                        Generar PDF
+                    </a>
+                    <button
+                        wire:click="cerrarPanel"
+                        class="text-slate-400 hover:text-white hover:bg-slate-700 rounded-full p-1.5 transition"
+                    >
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+                        </svg>
+                    </button>
+                </div>
+            </div>
+
+            {{-- ── ESTADÍSTICAS ───────────────────────────────────────── --}}
+            <div class="grid grid-cols-4 divide-x divide-gray-100 border-b shrink-0">
+                <div class="px-5 py-3 text-center">
+                    <div class="text-2xl font-black text-gray-800">{{ $this->stats['total'] }}</div>
+                    <div class="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Total</div>
+                </div>
+                <div class="px-5 py-3 text-center">
+                    <div class="text-2xl font-black text-green-700">{{ $this->stats['habilitados'] }}</div>
+                    <div class="text-[10px] font-bold text-green-400 uppercase tracking-widest">Habilitados</div>
+                </div>
+                <div class="px-5 py-3 text-center">
+                    <div class="text-2xl font-black text-amber-600">{{ $this->stats['pendientes'] }}</div>
+                    <div class="text-[10px] font-bold text-amber-400 uppercase tracking-widest">Pendientes</div>
+                </div>
+                <div class="px-5 py-3 text-center">
+                    <div class="text-2xl font-black text-red-600">{{ $this->stats['sin_clasificar'] }}</div>
+                    <div class="text-[10px] font-bold text-red-300 uppercase tracking-widest">Sin Clasificar</div>
+                </div>
+            </div>
+
+            {{-- ── MENSAJE FLASH ──────────────────────────────────────── --}}
+            @if($mensaje)
+            <div class="mx-6 mt-4 shrink-0 px-4 py-2.5 rounded-lg text-sm font-semibold flex items-center gap-2
+                {{ $mensajeTipo === 'ok' ? 'bg-green-50 text-green-700 border border-green-200' : 'bg-red-50 text-red-700 border border-red-200' }}">
+                @if($mensajeTipo === 'ok')
+                    <svg class="w-4 h-4 shrink-0" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"/></svg>
+                @else
+                    <svg class="w-4 h-4 shrink-0" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clip-rule="evenodd"/></svg>
+                @endif
+                {{ $mensaje }}
+            </div>
+            @endif
+
+            {{-- ── TABLA DE INSCRIPTOS ────────────────────────────────── --}}
+            <div class="overflow-y-auto flex-1 px-6 pb-6">
+                @if(empty($inscriptos))
+                    <div class="flex flex-col items-center justify-center py-16 text-center">
+                        <svg class="w-12 h-12 text-gray-200 mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z"/>
+                        </svg>
+                        <p class="text-gray-400 font-bold uppercase text-sm tracking-widest">Sin inscriptos aún</p>
+                        <p class="text-gray-300 text-xs mt-1">Las inscripciones aparecerán aquí cuando los docentes se postulen.</p>
+                    </div>
+                @else
+                <table class="w-full text-sm mt-4">
+                    <thead>
+                        <tr class="bg-gray-50 border-y border-gray-200">
+                            <th class="px-3 py-2.5 text-left text-[10px] font-black uppercase text-gray-500 tracking-wider w-8">Ord.</th>
+                            <th class="px-3 py-2.5 text-left text-[10px] font-black uppercase text-gray-500 tracking-wider">Apellido y Nombre</th>
+                            <th class="px-3 py-2.5 text-left text-[10px] font-black uppercase text-gray-500 tracking-wider w-24">DNI</th>
+                            <th class="px-3 py-2.5 text-left text-[10px] font-black uppercase text-gray-500 tracking-wider w-28">Teléfono</th>
+                            <th class="px-3 py-2.5 text-left text-[10px] font-black uppercase text-gray-500 tracking-wider">Email</th>
+                            <th class="px-3 py-2.5 text-center text-[10px] font-black uppercase text-gray-500 tracking-wider w-24">Puntaje</th>
+                            <th class="px-3 py-2.5 text-center text-[10px] font-black uppercase text-gray-500 tracking-wider w-28">Estado</th>
+                            <th class="px-3 py-2.5 text-center text-[10px] font-black uppercase text-gray-500 tracking-wider w-20">Acc.</th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-gray-100">
+                        @foreach($inscriptos as $ins)
+                        @php $ins = (object)$ins; @endphp
+                        <tr wire:key="ins-{{ $ins->id }}"
+                            class="{{ $editandoId === $ins->id ? 'bg-yellow-50' : 'hover:bg-slate-50' }} transition">
+
+                            @if($editandoId === $ins->id)
+                            {{-- FILA EN MODO EDICIÓN --}}
+                            <td class="px-3 py-2 text-center">
+                                <input wire:model="editOrden" type="number" min="1"
+                                    class="w-14 border border-gray-300 rounded px-1 py-1 text-xs text-center">
+                            </td>
+                            <td class="px-3 py-2">
+                                <div class="font-bold text-gray-800 text-xs">{{ $ins->apellido }} {{ $ins->nombre }}</div>
+                                <input wire:model="editObs" type="text" placeholder="Observaciones..."
+                                    class="mt-1 w-full border border-gray-300 rounded px-2 py-1 text-xs text-gray-600">
+                            </td>
+                            <td class="px-3 py-2 text-xs text-gray-600">{{ $ins->dni }}</td>
+                            <td class="px-3 py-2 text-xs text-gray-500">{{ $ins->telefono ?? '—' }}</td>
+                            <td class="px-3 py-2 text-xs text-gray-500">{{ $ins->email ?? '—' }}</td>
+                            <td class="px-3 py-2 text-center">
+                                <input wire:model="editPuntaje" type="number" step="0.01" min="0" max="100"
+                                    placeholder="0.00"
+                                    class="w-20 border border-gray-300 rounded px-2 py-1 text-xs text-center">
+                                @error('editPuntaje') <p class="text-red-500 text-[9px] mt-0.5">{{ $message }}</p> @enderror
+                            </td>
+                            <td class="px-3 py-2 text-center">
+                                <select wire:model="editEstado"
+                                    class="border border-gray-300 rounded px-2 py-1 text-xs w-full">
+                                    <option value="pendiente">Pendiente</option>
+                                    <option value="habilitado">Habilitado</option>
+                                    <option value="sin_clasificar">Sin Clasificar</option>
+                                </select>
+                                @error('editEstado') <p class="text-red-500 text-[9px] mt-0.5">{{ $message }}</p> @enderror
+                            </td>
+                            <td class="px-3 py-2 text-center">
+                                <div class="flex justify-center items-center gap-1">
+                                    <button wire:click="guardarEdicion"
+                                        class="bg-green-600 hover:bg-green-700 text-white rounded px-2 py-1 text-[9px] font-black uppercase transition">
+                                        Guardar
+                                    </button>
+                                    <button wire:click="cancelarEdicion"
+                                        class="bg-gray-300 hover:bg-gray-400 text-gray-700 rounded px-2 py-1 text-[9px] font-black uppercase transition">
+                                        ✕
+                                    </button>
+                                </div>
+                            </td>
+
+                            @else
+                            {{-- FILA NORMAL --}}
+                            <td class="px-3 py-2 text-center text-xs font-black text-indigo-600">
+                                {{ $ins->orden ? str_pad($ins->orden, 2, '0', STR_PAD_LEFT) : '—' }}
+                            </td>
+                            <td class="px-3 py-2">
+                                <div class="font-bold text-gray-800 text-xs">{{ $ins->apellido }} {{ $ins->nombre }}</div>
+                                @if($ins->observaciones)
+                                    <div class="text-[10px] text-gray-400 italic mt-0.5">{{ $ins->observaciones }}</div>
+                                @endif
+                            </td>
+                            <td class="px-3 py-2 text-xs text-gray-600 font-mono">{{ $ins->dni }}</td>
+                            <td class="px-3 py-2 text-xs text-gray-500">{{ $ins->telefono ?? '—' }}</td>
+                            <td class="px-3 py-2 text-xs text-gray-500">{{ $ins->email ?? '—' }}</td>
+                            <td class="px-3 py-2 text-center">
+                                @if($ins->puntaje !== null)
+                                    <span class="font-black text-sm
+                                        {{ $ins->estado === 'habilitado' ? 'text-green-700' : 'text-gray-500' }}">
+                                        {{ number_format($ins->puntaje, 2) }}
+                                    </span>
+                                @else
+                                    <span class="text-gray-300 text-xs">—</span>
+                                @endif
+                            </td>
+                            <td class="px-3 py-2 text-center">
+                                @php
+                                    $estadoClasses = match($ins->estado) {
+                                        'habilitado'    => 'bg-green-100 text-green-700 border-green-200',
+                                        'sin_clasificar'=> 'bg-red-100 text-red-700 border-red-200',
+                                        default         => 'bg-amber-100 text-amber-700 border-amber-200',
+                                    };
+                                    $estadoLabel = match($ins->estado) {
+                                        'habilitado'    => 'Habilitado',
+                                        'sin_clasificar'=> 'Sin Clasif.',
+                                        default         => 'Pendiente',
+                                    };
+                                @endphp
+                                <span class="inline-block px-2 py-0.5 rounded-full text-[10px] font-black uppercase border {{ $estadoClasses }}">
+                                    {{ $estadoLabel }}
+                                </span>
+                            </td>
+                            <td class="px-3 py-2 text-center">
+                                <div class="flex justify-center items-center gap-1">
+                                    <button wire:click="editarInscripto({{ $ins->id }})"
+                                        class="text-indigo-500 hover:text-indigo-700 p-1 rounded hover:bg-indigo-50 transition"
+                                        title="Editar">
+                                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/>
+                                        </svg>
+                                    </button>
+                                    <button
+                                        onclick="confirm('¿Eliminar este inscripto?') || event.stopImmediatePropagation()"
+                                        wire:click="eliminarInscripto({{ $ins->id }})"
+                                        class="text-red-400 hover:text-red-600 p-1 rounded hover:bg-red-50 transition"
+                                        title="Eliminar">
+                                        <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                                            <path fill-rule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v6a1 1 0 102 0V8a1 1 0 00-1-1z" clip-rule="evenodd"/>
+                                        </svg>
+                                    </button>
+                                </div>
+                            </td>
+                            @endif
+
+                        </tr>
+                        @endforeach
+                    </tbody>
+                </table>
+                @endif
+            </div>
+
+            {{-- ── FOOTER ─────────────────────────────────────────────── --}}
+            <div class="flex items-center justify-between px-6 py-4 border-t bg-gray-50 rounded-b-2xl shrink-0">
+                <p class="text-xs text-gray-400">
+                    El PDF se genera con los inscriptos en estado <strong>Habilitado</strong> y <strong>Sin Clasificar</strong>.
+                    Los <em>Pendientes</em> no aparecen en el documento oficial.
+                </p>
+                <div class="flex gap-2">
+                    <button wire:click="cerrarPanel"
+                        class="px-5 py-2 text-xs font-bold text-gray-500 hover:text-gray-800 uppercase transition">
+                        Cerrar
+                    </button>
+                    <a href="{{ route('admin.llamados.pdf', $llamadoId) }}" target="_blank"
+                       class="flex items-center gap-1.5 bg-red-600 hover:bg-red-700 text-white font-black px-5 py-2 rounded-lg text-xs uppercase shadow-md transition">
+                        <svg class="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 20 20">
+                            <path fill-rule="evenodd" d="M4 4a2 2 0 012-2h4.586A2 2 0 0112 2.586L15.414 6A2 2 0 0116 7.414V16a2 2 0 01-2 2H6a2 2 0 01-2-2V4z" clip-rule="evenodd"/>
+                        </svg>
+                        Descargar PDF
+                    </a>
+                </div>
+            </div>
+
+        </div>
+    </div>
+    @endif
+</div>

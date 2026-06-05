@@ -1,0 +1,586 @@
+<?php
+
+    use Livewire\Volt\Component;
+    use Illuminate\Support\Facades\DB;
+    use Livewire\Attributes\Computed;
+
+    new class extends Component {
+        // Listas para combos
+        public $zonas = [];
+        public $tipos_llamado = [];
+        public $estados = [];
+        public $situaciones_revista = [];
+        
+        // Combos dependientes
+        public $institutos = [];
+        public $carreras = [];
+        public $espacios = [];
+        public $cargos = [];
+        
+        // Datos de la cabecera (nuevo_llamado)
+        public $idtb_zona = '';
+        public $idtipo_llamado = '';
+        public $idtb_tipoestado = 8; // Abierto por defecto
+        public $fecha_ini = '';
+        public $fecha_fin = '';
+        public $url_form = '';
+        public $descripcion = '';
+
+        // Datos del detalle
+        public $instituto_id = '';
+        public $carrera_id = '';
+        public $es_cargo = false; // Toggle entre Espacio o Cargo
+        public $nuevo_rel_carrera_espacio_id = '';
+        public $nuevo_rel_carrera_cargo_id = '';
+        
+        // Lista temporal de detalles
+        public $detalles_agregados = [];
+        public $ultimo_cierre = null;
+
+        public function mount()
+        {
+            $this->zonas = DB::table('tb_zona')->orderBy('nombre_zona')->get()->toArray();
+            $this->tipos_llamado = DB::table('tipo_llamado')->orderBy('nombre')->get()->toArray();
+            $this->estados = DB::table('tb_tipoestado')->orderBy('nombre_tipoestado')->get()->toArray();
+            $this->situaciones_revista = DB::table('tb_situacion_revista')->get()->toArray();
+        }
+
+        public function updatedIdtbZona($value)
+        {
+            $this->institutos = $value ? DB::table('tb_instituto_superior')->where('zona_id', $value)->orderBy('nombre')->get()->toArray() : [];
+            $this->instituto_id = '';
+            $this->carreras = [];
+            $this->carrera_id = '';
+            $this->espacios = [];
+            $this->cargos = [];
+        }
+
+        public function updatedInstitutoId($value)
+        {
+            $this->carreras = $value ? DB::table('tb_carreras')
+                ->join('rel_instsup_carrera', 'tb_carreras.id', '=', 'rel_instsup_carrera.carrera_id')
+                ->where('rel_instsup_carrera.instituto_id', $value)
+                ->select('tb_carreras.*')
+                ->orderBy('tb_carreras.nombre')
+                ->get()->toArray() : [];
+            $this->carrera_id = '';
+            $this->espacios = [];
+            $this->cargos = [];
+        }
+
+        public function updatedCarreraId($value)
+        {
+            if ($value) {
+                $this->espacios = DB::table('nuevo_rel_carrera_espacio')
+                    ->join('tb_espacioscurriculares', 'nuevo_rel_carrera_espacio.espacio_id', '=', 'tb_espacioscurriculares.idEspacioCurricular')
+                    ->where('nuevo_rel_carrera_espacio.carrera_id', $value)
+                    ->select('nuevo_rel_carrera_espacio.id', 'tb_espacioscurriculares.nombre_espacio')
+                    ->get()->toArray();
+
+                $this->cargos = DB::table('nuevo_rel_carrera_cargo')
+                    ->join('tb_cargos', 'nuevo_rel_carrera_cargo.cargo_id', '=', 'tb_cargos.id')
+                    ->where('nuevo_rel_carrera_cargo.carrera_id', $value)
+                    ->select('nuevo_rel_carrera_cargo.id', 'tb_cargos.nombre_cargo')
+                    ->get()->toArray();
+            } else {
+                $this->espacios = [];
+                $this->cargos = [];
+            }
+            $this->nuevo_rel_carrera_espacio_id = '';
+            $this->nuevo_rel_carrera_cargo_id = '';
+        }
+
+        private function tz(): string
+        {
+            return config('app.timezone', 'America/Argentina/Buenos_Aires');
+        }
+
+        private function parsearFecha(string $value): \Carbon\Carbon
+        {
+            return \Carbon\Carbon::createFromFormat('Y-m-d\TH:i', $value, $this->tz());
+        }
+        public function actualizarEstadoPorFecha($value)
+        {
+            if (!$value) return;
+            try {
+                $this->idtb_tipoestado = $this->parsearFecha($value)->lte(\Carbon\Carbon::now($this->tz())) ? 9 : 8;
+            } catch (\Exception $e) {}
+        }
+        
+        public function checkCurrentStatus()
+        {
+            if (!$this->fecha_fin) return;
+            try {
+                $this->idtb_tipoestado = $this->parsearFecha($this->fecha_fin)->lte(\Carbon\Carbon::now($this->tz())) ? 9 : 8;
+            } catch (\Exception $e) {}
+        }
+
+        public function cerrarVencidos()
+        {
+            $ahora = \Carbon\Carbon::now($this->tz())->format('Y-m-d H:i:00');
+
+            DB::table('nuevo_llamado')
+                ->where('idtb_tipoestado', 8)
+                ->where('fecha_fin', '<=', $ahora)
+                ->update(['idtb_tipoestado' => 9]);
+
+            // Cambia propiedad reactiva → Livewire 3 re-ejecuta el computed
+            $this->ultimo_cierre = $ahora;
+        }
+
+        public function agregarDetalle()
+        {
+            $this->validate([
+                'instituto_id' => 'required',
+                'carrera_id' => 'required',
+            ]);
+
+            if ($this->es_cargo) {
+                $this->validate(['nuevo_rel_carrera_cargo_id' => 'required']);
+                $rel = DB::table('nuevo_rel_carrera_cargo')
+                    ->join('tb_cargos', 'nuevo_rel_carrera_cargo.cargo_id', '=', 'tb_cargos.id')
+                    ->where('nuevo_rel_carrera_cargo.id', $this->nuevo_rel_carrera_cargo_id)
+                    ->select('tb_cargos.nombre_cargo as nombre')
+                    ->first();
+                $id_rel = $this->nuevo_rel_carrera_cargo_id;
+                $tipo = 'Cargo';
+            } else {
+                $this->validate(['nuevo_rel_carrera_espacio_id' => 'required']);
+                $rel = DB::table('nuevo_rel_carrera_espacio')
+                    ->join('tb_espacioscurriculares', 'nuevo_rel_carrera_espacio.espacio_id', '=', 'tb_espacioscurriculares.idEspacioCurricular')
+                    ->where('nuevo_rel_carrera_espacio.id', $this->nuevo_rel_carrera_espacio_id)
+                    ->select('tb_espacioscurriculares.nombre_espacio as nombre')
+                    ->first();
+                $id_rel = $this->nuevo_rel_carrera_espacio_id;
+                $tipo = 'Espacio';
+            }
+
+            $carrera = DB::table('tb_carreras')->where('id', $this->carrera_id)->value('nombre');
+
+            $this->detalles_agregados[] = [
+                'instituto_id' => $this->instituto_id,
+                'carrera_id' => $this->carrera_id,
+                'carrera_nombre' => $carrera,
+                'tipo' => $tipo,
+                'id_rel' => $id_rel,
+                'nombre' => $rel->nombre,
+            ];
+
+            // Limpiar para el siguiente
+            $this->nuevo_rel_carrera_espacio_id = '';
+            $this->nuevo_rel_carrera_cargo_id = '';
+        }
+
+        public function quitarDetalle($index)
+        {
+            unset($this->detalles_agregados[$index]);
+            $this->detalles_agregados = array_values($this->detalles_agregados);
+        }
+
+    public function guardar()
+        {
+            $this->validate([
+                'idtb_zona'          => 'required',
+                'idtipo_llamado'     => 'required',
+                'fecha_ini'          => 'required',
+                'fecha_fin'          => 'required',
+                'idtb_tipoestado'    => 'required',
+                'detalles_agregados' => 'required|array|min:1',
+            ]);
+
+            $fechaIni = $this->parsearFecha($this->fecha_ini)->format('Y-m-d H:i:00');
+            $fechaFin = $this->parsearFecha($this->fecha_fin)->format('Y-m-d H:i:00');
+
+
+            DB::transaction(function () use ($fechaIni, $fechaFin) {
+                $llamadoId = DB::table('nuevo_llamado')->insertGetId([
+                    'idtb_zona'       => $this->idtb_zona,
+                    'idtipo_llamado'  => $this->idtipo_llamado,
+                    'fecha_ini'       => $fechaIni,  // ✅
+                    'fecha_fin'       => $fechaFin,  // ✅
+                    'idtb_tipoestado' => $this->idtb_tipoestado,
+                    'url_form'        => $this->url_form,
+                    'descripcion'     => $this->descripcion,
+                    'created_at'      => now(),
+                ]);
+
+                foreach ($this->detalles_agregados as $detalle) {
+                    if ($detalle['tipo'] == 'Espacio') {
+                        DB::table('nuevo_espacios_por_llamado')->insert([
+                            'llamado_id'                    => $llamadoId,
+                            'nuevo_rel_carrera_espacio_id'  => $detalle['id_rel'],
+                        ]);
+                    } else {
+                        DB::table('nuevo_cargo_por_llamado')->insert([
+                            'llamado_id'                   => $llamadoId,
+                            'nuevo_rel_carrera_cargo_id'   => $detalle['id_rel'],
+                        ]);
+                    }
+                }
+            });
+
+            session()->flash('success', 'Llamado publicado exitosamente.');
+            $this->reset(['idtb_zona', 'idtipo_llamado', 'fecha_ini', 'fecha_fin', 'url_form', 'descripcion',
+                        'detalles_agregados', 'instituto_id', 'carrera_id',
+                        'nuevo_rel_carrera_espacio_id', 'nuevo_rel_carrera_cargo_id']);
+            $this->idtb_tipoestado = 8;
+        }
+
+    #[Computed(cache: false)]
+        public function llamados()
+        {
+            $ahora = \Carbon\Carbon::now($this->tz());
+            $ESTADO_CERRADO = 9;
+
+            $rows = DB::table('nuevo_llamado')
+                ->leftJoin('tb_zona', 'nuevo_llamado.idtb_zona', '=', 'tb_zona.id')
+                ->leftJoin('tipo_llamado', 'nuevo_llamado.idtipo_llamado', '=', 'tipo_llamado.id')
+                ->leftJoin('tb_tipoestado', 'nuevo_llamado.idtb_tipoestado', '=', 'tb_tipoestado.idtb_tipoestado')
+                ->select(
+                    'nuevo_llamado.*',
+                    'tb_zona.nombre_zona',
+                    'tipo_llamado.nombre as tipo_nombre',
+                    'tb_tipoestado.nombre_tipoestado as estado_nombre'
+                )
+                ->orderBy('nuevo_llamado.id', 'desc')
+                ->get();
+
+            if ($rows->isEmpty()) return $rows;
+
+            $ids = $rows->pluck('id')->toArray();
+
+            // ✅ UNA sola query para todos los espacios
+            $espaciosPorLlamado = DB::table('nuevo_espacios_por_llamado')
+                ->join('nuevo_rel_carrera_espacio', 'nuevo_espacios_por_llamado.nuevo_rel_carrera_espacio_id', '=', 'nuevo_rel_carrera_espacio.id')
+                ->join('tb_espacioscurriculares', 'nuevo_rel_carrera_espacio.espacio_id', '=', 'tb_espacioscurriculares.idEspacioCurricular')
+                ->join('tb_carreras', 'nuevo_rel_carrera_espacio.carrera_id', '=', 'tb_carreras.id')
+                ->whereIn('nuevo_espacios_por_llamado.llamado_id', $ids)
+                ->select(
+                    'nuevo_espacios_por_llamado.llamado_id',
+                    'tb_espacioscurriculares.nombre_espacio as detalle',
+                    'tb_carreras.nombre as carrera'
+                )
+                ->get()
+                ->groupBy('llamado_id');
+
+            // ✅ UNA sola query para todos los cargos
+            $cargosPorLlamado = DB::table('nuevo_cargo_por_llamado')
+                ->join('nuevo_rel_carrera_cargo', 'nuevo_cargo_por_llamado.nuevo_rel_carrera_cargo_id', '=', 'nuevo_rel_carrera_cargo.id')
+                ->join('tb_cargos', 'nuevo_rel_carrera_cargo.cargo_id', '=', 'tb_cargos.id')
+                ->join('tb_carreras', 'nuevo_rel_carrera_cargo.carrera_id', '=', 'tb_carreras.id')
+                ->whereIn('nuevo_cargo_por_llamado.llamado_id', $ids)
+                ->select(
+                    'nuevo_cargo_por_llamado.llamado_id',
+                    'tb_cargos.nombre_cargo as detalle',
+                    'tb_carreras.nombre as carrera'
+                )
+                ->get()
+                ->groupBy('llamado_id');
+
+            foreach ($rows as $item) {
+                // Cierre visual
+                if (\Carbon\Carbon::parse($item->fecha_fin, $this->tz())->lte($ahora) && $item->idtb_tipoestado != $ESTADO_CERRADO) {
+                    $item->idtb_tipoestado = $ESTADO_CERRADO;
+                    $item->estado_nombre   = 'Cerrado';
+                }
+
+                $espacios = $espaciosPorLlamado->get($item->id, collect());
+                $cargos   = $cargosPorLlamado->get($item->id, collect());
+                $todos    = $espacios->merge($cargos);
+
+                $item->nombres_carreras = $todos->pluck('carrera')->unique()->values()->toArray();
+                $item->nombres_detalles = $todos->pluck('detalle')->toArray();
+            }
+
+            return $rows;
+        }
+  
+    
+        
+    };
+?>
+
+<div class="p-6 bg-white rounded-xl shadow-lg border border-gray-100 max-w-6xl mx-auto my-8">
+    <div class="flex justify-between items-center mb-6 border-b pb-4">
+        <h1 class="text-3xl font-bold text-gray-800">Crear Nuevo Llamado</h1>
+        <div class="flex items-center space-x-2">
+            <span class="text-sm font-medium text-gray-500 uppercase">Estado actual:</span>
+            @if($idtb_tipoestado == 8)
+                <span class="bg-green-100 text-green-700 px-3 py-1 rounded-full text-xs font-bold uppercase border border-green-200">Abierto</span>
+            @else
+                <span class="bg-red-100 text-red-700 px-3 py-1 rounded-full text-xs font-bold uppercase border border-red-200">Cerrado</span>
+            @endif
+        </div>
+    </div>
+
+    @if (session()->has('success'))
+        <div class="mb-6 p-4 bg-green-50 border-l-4 border-green-500 text-green-700 shadow-sm rounded-r-lg animate-pulse">
+            <div class="flex items-center">
+                <svg class="w-5 h-5 mr-2" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"></path></svg>
+                <span class="font-bold">{{ session('success') }}</span>
+            </div>
+        </div>
+    @endif
+
+    <form wire:submit.prevent="guardar" class="space-y-8">
+        <!-- SECCIÓN CABECERA -->
+        <div class="bg-gray-50 p-6 rounded-xl border border-gray-200 shadow-inner">
+            <h2 class="text-xl font-semibold text-indigo-700 mb-6 flex items-center">
+                <svg class="w-6 h-6 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
+                Datos del Llamado
+            </h2>
+            
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                <div>
+                    <label class="block text-sm font-bold text-gray-700 mb-1">Tipo de Llamado</label>
+                    <select wire:model.live="idtipo_llamado" class="w-full border-gray-300 rounded-lg shadow-sm focus:border-indigo-500 focus:ring-indigo-500 text-sm">
+                        <option value="">Seleccione tipo...</option>
+                        @foreach($tipos_llamado as $t)
+                            <option value="{{ $t->id }}">{{ $t->nombre }}</option>
+                        @endforeach
+                    </select>
+                    @error('idtipo_llamado') <span class="text-red-500 text-xs italic">{{ $message }}</span> @enderror
+                </div>
+
+                <div>
+                    <label class="block text-sm font-bold text-gray-700 mb-1">Estado</label>
+                        <div class="w-full border border-gray-300 rounded-lg shadow-sm bg-gray-100 text-gray-600 text-sm px-3 py-2">
+                            @if($idtb_tipoestado == 8)
+                                <span class="text-green-700 font-bold">● Abierto</span>
+                            @else
+                                <span class="text-red-700 font-bold">● Cerrado</span>
+                            @endif
+                        </div>
+                        <input type="hidden" wire:model="idtb_tipoestado">
+                </div>
+                  <div class="flex items-center space-x-6 mb-6 pb-4 border-b border-gray-100">
+                    <label class="inline-flex items-center cursor-pointer group">
+                        <input type="radio" wire:model.live="es_cargo" value="0" class="form-radio h-5 w-5 text-blue-600 border-gray-300 focus:ring-blue-500">
+                        <span class="ml-2 text-sm font-bold text-gray-700 group-hover:text-blue-600 transition">Espacio Curricular</span>
+                    </label><br>
+                    <label class="inline-flex items-center cursor-pointer group">
+                        <input type="radio" wire:model.live="es_cargo" value="1" class="form-radio h-5 w-5 text-blue-600 border-gray-300 focus:ring-blue-500">
+                        <span class="ml-2 text-sm font-bold text-gray-700 group-hover:text-blue-600 transition">Cargo</span>
+                    </label>
+                </div>
+              <div>
+                    <label class="block text-sm font-bold text-gray-700 mb-1">Fecha Inicio</label>
+                    <input type="datetime-local" 
+                        wire:model="fecha_ini" 
+                        class="w-full border-gray-300 rounded-lg shadow-sm focus:border-indigo-500 focus:ring-indigo-500 text-sm">
+                    @error('fecha_ini') <span class="text-red-500 text-xs italic">{{ $message }}</span> @enderror
+                </div>
+
+                <div>
+                    <label class="block text-sm font-bold text-gray-700 mb-1">Fecha Fin</label>
+                    <input type="datetime-local" 
+                        wire:model="fecha_fin"
+                        x-on:change="$wire.actualizarEstadoPorFecha($event.target.value)"
+                        class="w-full border-gray-300 rounded-lg shadow-sm focus:border-indigo-500 focus:ring-indigo-500 text-sm">
+                    @error('fecha_fin') <span class="text-red-500 text-xs italic">{{ $message }}</span> @enderror
+                </div>
+
+                <div class="lg:col-span-2">
+                    <label class="block text-sm font-bold text-gray-700 mb-1">Link de Inscripción (URL Form)</label>
+                    <input type="url" wire:model.blur="url_form" placeholder="https://forms.gle/..." class="w-full border-gray-300 rounded-lg shadow-sm focus:border-indigo-500 focus:ring-indigo-500 text-sm">
+                    @error('url_form') <span class="text-red-500 text-xs italic">{{ $message }}</span> @enderror
+                </div>
+            </div>
+        </div>
+
+        <!-- SECCIÓN UBICACIÓN Y DETALLE -->
+        <div class="bg-blue-50 p-6 rounded-xl border border-blue-200 shadow-inner">
+            <h2 class="text-xl font-semibold text-blue-800 mb-6 flex items-center">
+                <svg class="w-6 h-6 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"></path></svg>
+                Ubicación y Detalle
+            </h2>
+
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-6">
+                <div>
+                    <label class="block text-sm font-bold text-gray-700 mb-1">Zona</label>
+                    <select wire:model.live="idtb_zona" class="w-full border-gray-300 rounded-lg shadow-sm focus:border-blue-500 focus:ring-blue-500 text-sm">
+                        <option value="">Seleccione zona...</option>
+                        @foreach($zonas as $z)
+                            <option value="{{ $z->id }}">{{ $z->nombre_zona }}</option>
+                        @endforeach
+                    </select>
+                </div>
+
+                <div>
+                    <label class="block text-sm font-bold text-gray-700 mb-1">Instituto</label>
+                    <select wire:model.live="instituto_id" class="w-full border-gray-300 rounded-lg shadow-sm focus:border-blue-500 focus:ring-blue-500 text-sm {{ empty($institutos) ? 'bg-gray-100' : '' }}">
+                        <option value="">Seleccione instituto...</option>
+                        @foreach($institutos as $i)
+                            <option value="{{ $i->id }}">{{ $i->nombre }}</option>
+                        @endforeach
+                    </select>
+                </div>
+
+                <div>
+                    <label class="block text-sm font-bold text-gray-700 mb-1">Carrera</label>
+                    <select wire:model.live="carrera_id" class="w-full border-gray-300 rounded-lg shadow-sm focus:border-blue-500 focus:ring-blue-500 text-sm {{ empty($carreras) ? 'bg-gray-100' : '' }}">
+                        <option value="">Seleccione carrera...</option>
+                        @foreach($carreras as $c)
+                            <option value="{{ $c->id }}">{{ $c->nombre }}</option>
+                        @endforeach
+                    </select>
+                </div>
+            </div>
+
+            <div class="bg-white p-6 rounded-lg border border-blue-100 shadow-sm">
+              
+
+                <div class="flex flex-col md:flex-row items-end gap-4">
+                    <div class="flex-grow">
+                        @if(!$es_cargo)
+                            <label class="block text-sm font-bold text-gray-700 mb-1">Seleccionar Espacio</label>
+                            <select wire:model.live="nuevo_rel_carrera_espacio_id" class="w-full border-gray-300 rounded-lg shadow-sm focus:border-blue-500 focus:ring-blue-500 text-sm">
+                                <option value="">Elija un espacio...</option>
+                                @foreach($espacios as $e)
+                                    <option value="{{ $e->id }}">{{ $e->nombre_espacio }}</option>
+                                @endforeach
+                            </select>
+                        @else
+                            <label class="block text-sm font-bold text-gray-700 mb-1">Seleccionar Cargo</label>
+                            <select wire:model.live="nuevo_rel_carrera_cargo_id" class="w-full border-gray-300 rounded-lg shadow-sm focus:border-blue-500 focus:ring-blue-500 text-sm">
+                                <option value="">Elija un cargo...</option>
+                                @foreach($cargos as $ca)
+                                    <option value="{{ $ca->id }}">{{ $ca->nombre_cargo }}</option>
+                                @endforeach
+                            </select>
+                        @endif
+                    </div>
+                    <button type="button" wire:click="agregarDetalle" class="bg-blue-800 hover:bg-blue-900 text-white font-bold py-2 px-6 rounded-lg shadow-md transition flex items-center h-10">
+                        <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M12 4v16m8-8H4"></path></svg>
+                        Añadir
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- LISTADO DE DETALLES AGREGADOS -->
+        @if(!empty($detalles_agregados))
+            <div class="mt-8 border-t pt-6">
+                <h3 class="text-sm font-black text-gray-500 uppercase mb-4 tracking-widest flex items-center">
+                    <span class="mr-2">Detalles a publicar</span>
+                    <span class="bg-blue-100 text-blue-800 px-2 py-0.5 rounded text-xs">{{ count($detalles_agregados) }}</span>
+                </h3>
+                <div class="overflow-hidden rounded-xl border border-gray-200 shadow-lg">
+                    <table class="min-w-full divide-y divide-gray-200">
+                        <thead class="bg-slate-800 text-white">
+                            <tr>
+                                <th class="px-4 py-3 text-left text-xs font-bold uppercase tracking-wider">Carrera</th>
+                                <th class="px-4 py-3 text-left text-xs font-bold uppercase tracking-wider">Tipo</th>
+                                <th class="px-4 py-3 text-left text-xs font-bold uppercase tracking-wider">Nombre del Item</th>
+                                <th class="px-4 py-3 text-center text-xs font-bold uppercase tracking-wider">Acciones</th>
+                            </tr>
+                        </thead>
+                        <tbody class="bg-white divide-y divide-gray-200">
+                            @foreach($detalles_agregados as $index => $det)
+                                <tr class="hover:bg-yellow-50 transition">
+                                    <td class="px-4 py-3 text-sm text-gray-700 font-medium">{{ $det['carrera_nombre'] }}</td>
+                                    <td class="px-4 py-3 text-sm">
+                                        <span class="px-2 py-1 rounded text-xs font-bold {{ $det['tipo'] == 'Cargo' ? 'bg-purple-100 text-purple-800' : 'bg-blue-100 text-blue-800' }}">
+                                            {{ $det['tipo'] }}
+                                        </span>
+                                    </td>
+                                    <td class="px-4 py-3 text-sm text-gray-900 font-bold italic">{{ $det['nombre'] }}</td>
+                                    <td class="px-4 py-3 text-center">
+                                        <button type="button" wire:click="quitarDetalle({{ $index }})" class="text-red-600 hover:text-red-900 font-bold p-1 rounded hover:bg-red-50 transition">
+                                            <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v6a1 1 0 102 0V8a1 1 0 00-1-1z" clip-rule="evenodd"></path></svg>
+                                        </button>
+                                    </td>
+                                </tr>
+                            @endforeach
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        @endif
+
+        <div class="flex justify-end pt-8 border-t border-gray-100">
+            <button type="submit" class="bg-indigo-600 hover:bg-indigo-700 text-white font-black py-4 px-12 rounded-xl shadow-xl hover:shadow-2xl transform hover:-translate-y-1 transition duration-200 flex items-center text-lg">
+                <svg class="w-6 h-6 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path></svg>
+                Cargar Llamado
+            </button>
+        </div>
+    </form>
+
+    <!-- LISTADO DE LLAMADOS REGISTRADOS -->
+    <div wire:poll.30s="cerrarVencidos" class="mt-20">
+        <h2 class="text-3xl font-black text-gray-800 mb-8 flex items-center pb-2 border-b-4 border-indigo-500 w-fit">
+            <svg class="w-8 h-8 mr-3 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 10h16M4 14h16M4 18h16"></path></svg>
+            Historial de Llamados
+        </h2>
+
+        <div class="overflow-hidden rounded-2xl border border-gray-300 shadow-2xl">
+            <table class="min-w-full bg-white divide-y divide-gray-300">
+                <thead class="bg-gray-900 text-white">
+                    <tr>
+                        <th class="px-4 py-4 text-left text-xs font-black uppercase tracking-widest border-r border-gray-700 w-20">ID / Zona</th>
+                        >
+                        <th class="px-4 py-4 text-left text-xs font-black uppercase tracking-widest border-r border-gray-700 w-20">Instituto</th>
+                        <th class="px-4 py-4 text-left text-xs font-black uppercase tracking-widest border-r border-gray-700">Carreras Asociadas</th>
+                        <th class="px-4 py-4 text-left text-xs font-black uppercase tracking-widest border-r border-gray-700">Detalles (Espacios/Cargos)</th>
+                        <th class="px-4 py-4 text-left text-xs font-black uppercase tracking-widest border-r border-gray-700">Estado / Tipo</th>
+                        <th class="px-4 py-4 text-left text-xs font-black uppercase tracking-widest">Vigencia</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-gray-200">
+                    @forelse($this->llamados as $item)
+                        <tr class="hover:bg-blue-50 transition-colors group">
+                            <td class="px-4 py-4 align-middle border-r border-gray-100">
+                                <div class="text-lg font-black text-indigo-600">#{{ $item->id }}</div>
+                                <div class="text-sm font-bold text-gray-500 uppercase">{{ $item->nombre_zona }}</div>
+                            </td>
+                            <td class="px-4 py-4 align-middle border-r border-gray-100">
+                               
+                                <div class="text-sm font-bold text-gray-500 uppercase">                                  
+                                     {{ $i->nombre}}                              
+                            </div>
+                            </td>
+                            <td class="px-4 py-4 align-middle border-r border-gray-100">
+                                @foreach($item->nombres_carreras as $carrera)
+                                    <div class="text-xs font-bold text-gray-800 py-1 border-b border-gray-50 last:border-0">{{ $carrera }}</div>
+                                @endforeach
+                            </td>
+                            <td class="px-4 py-4 align-middle border-r border-gray-100">
+                                @foreach($item->nombres_detalles as $detall)
+                                    <div class="text-sm font-black text-slate-700 py-1 flex items-center">
+                                        <span class="w-2 h-2 bg-indigo-400 rounded-full mr-2"></span>
+                                        {{ $detall }}
+                                    </div>
+                                @endforeach
+                            </td>
+                            <td class="px-4 py-4 align-middle border-r border-gray-100">
+                                <div class="mb-2">
+                                    @if($item->idtb_tipoestado == 8)
+                                        <span class="bg-green-600 text-white px-3 py-1 rounded-md text-[10px] font-black uppercase tracking-tighter">Abierto</span>
+                                    @else
+                                        <span class="bg-red-600 text-white px-3 py-1 rounded-md text-[10px] font-black uppercase tracking-tighter">Cerrado</span>
+                                    @endif
+                                </div>
+                                <div class="">{{ $item->tipo_nombre }}</div>
+                            </td>
+                            <td class="px-4 py-4 align-middle">
+                                <div class="text-xs whitespace-nowrap">
+                                    <span class="font-bold text-slate-400">INICIO:</span> 
+                                    <span class="text-slate-700">{{ \Carbon\Carbon::parse($item->fecha_ini)->setTimezone(config('app.timezone'))->format('d/m/Y H:i') }}</span>
+                                </div>
+                                <div class="text-xs whitespace-nowrap mt-1">
+                                    <span class="font-bold text-slate-400">FIN:</span> 
+                                    <span class="text-red-700 font-bold">{{ \Carbon\Carbon::parse($item->fecha_fin)->setTimezone(config('app.timezone'))->format('d/m/Y H:i')  }}</span>
+                                </div>
+                            </td>
+                        </tr>
+                    @empty
+                        <tr>
+                            <td colspan="5" class="px-4 py-12 text-center text-gray-400 font-bold italic">No se han encontrado registros de llamados.</td>
+                        </tr>
+                    @endforelse
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
