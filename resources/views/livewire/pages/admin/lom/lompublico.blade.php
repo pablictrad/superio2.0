@@ -1,48 +1,57 @@
-<?php
+    <?php
+    use Livewire\Attributes\Layout;
+    use Illuminate\Support\Facades\DB;
+    use Illuminate\Support\Facades\Storage;
+    use Livewire\Attributes\Computed;
+    use Livewire\Volt\Component;
 
-use Livewire\Attributes\Layout;
-use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Storage;
-use Livewire\Attributes\Computed;
-use Livewire\Volt\Component;
-
-new #[Layout('layouts.publico')]
-class extends Component
-{
-    #[Computed(cache: false)]
-    public function loms()
+    new #[Layout('layouts.publico')]
+    class extends Component
     {
-        return DB::table('tb_lom')
-            ->leftJoin('tb_zona', 'tb_lom.idtb_zona', '=', 'tb_zona.id')
-            ->leftJoin('tb_instituto_superior', 'tb_lom.id_instituto_superior', '=', 'tb_instituto_superior.id')
-            ->leftJoin('tb_carreras', 'tb_lom.idCarrera', '=', 'tb_carreras.id')
-            ->leftJoin('tipo_llamado', 'tb_lom.idtipo_llamado', '=', 'tipo_llamado.id')
-            ->leftJoin('tb_cargos', 'tb_lom.idtb_cargo', '=', 'tb_cargos.id')
-            ->leftJoin('tb_espacioscurriculares', 'tb_lom.idEspacioCurricular', '=', 'tb_espacioscurriculares.idEspacioCurricular')
-            ->where('tb_lom.idtb_tipoestado', 8)
-            ->select(
-                'tb_lom.*',
-                'tb_zona.nombre_zona',
-                'tb_instituto_superior.nombre as instituto_nombre',
-                'tb_carreras.nombre as carrera_nombre',
-                'tipo_llamado.nombre as tipo_nombre',
-                'tb_cargos.nombre_cargo',
-                'tb_espacioscurriculares.nombre_espacio'
-            )
-            ->orderBy('tb_lom.idtb_lom', 'desc')
-            ->get();
-    }
-}; ?>
+        #[Computed(cache: false)]
+        public function loms()
+        {
+            return DB::table('tb_lom')
+                ->leftJoin('tb_zona', 'tb_lom.idtb_zona', '=', 'tb_zona.id')
+                ->leftJoin('tb_instituto_superior', 'tb_lom.id_instituto_superior', '=', 'tb_instituto_superior.id')
+                ->leftJoin('tb_carreras', 'tb_lom.idCarrera', '=', 'tb_carreras.id')
+                ->leftJoin('tipo_llamado', 'tb_lom.idtipo_llamado', '=', 'tipo_llamado.id')
+                ->leftJoin('tb_cargos', 'tb_lom.idtb_cargo', '=', 'tb_cargos.id')
+                ->leftJoin('tb_espacioscurriculares', 'tb_lom.idEspacioCurricular', '=', 'tb_espacioscurriculares.idEspacioCurricular')
+                ->where('tb_lom.idtb_tipoestado', 8)
+                ->select(
+                    'tb_lom.*',
+                    'tb_zona.nombre_zona',
+                    'tb_instituto_superior.nombre as instituto_nombre',
+                    'tb_carreras.nombre as carrera_nombre',
+                    'tipo_llamado.nombre as tipo_nombre',
+                    'tb_cargos.nombre_cargo',
+                    'tb_espacioscurriculares.nombre_espacio'
+                )
+                ->orderBy('tb_lom.idtb_lom', 'desc')
+                ->get();
+        }
+    };
+    
+?>
 
 <div class="p-6 bg-white rounded-xl shadow-lg border border-gray-100 max-w-6xl mx-auto my-8">
-
+    
     <div class="flex items-center mb-8 pb-4 border-b-4 border-indigo-500 w-fit">
         <svg class="w-8 h-8 mr-3 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/>
         </svg>
         <h1 class="text-3xl font-black text-gray-800">Listados de Orden de Mérito</h1>
     </div>
-
+      @if (Route::has('login'))
+        <div class="auth-row">
+                        @auth
+                            <a href="{{ route('dashboard') }}" class="btn-volver bg-indigo-600 hover:bg-indigo-700 text-white">Volver</a>
+                        @else
+                        <a href="{{ route('home') }}" class="btn-volver bg-indigo-600 hover:bg-indigo-700 text-white">Volver</a>
+                        @endauth
+                    </div>
+     @endif      
     <div class="overflow-x-auto rounded-2xl border border-gray-300 shadow-2xl">
         <table class="min-w-full border border-gray-300 table-fixed bg-white text-center">
             <thead class="bg-gray-900 text-white">
