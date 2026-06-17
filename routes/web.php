@@ -51,7 +51,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::get('/perfil', \App\Livewire\Perfil::class)->name('perfil');
     Route::livewire('/post/create', 'pages.post.⚡create')->name('post.create');
     Route::livewire('/contador', 'pages.contador.index')->name('contador');
-   // Route::livewire('/perfil', 'pages.perfil.perfil')->name('perfil');
+    Route::livewire('/perfil', 'pages.perfil.perfil')->name('perfil');
     Route::livewire('/dependientes', 'pages.dependientes.⚡index')->name('dependientes');
     Route::livewire('/llamados', 'pages.llamados.⚡index')->name('llamados');
 

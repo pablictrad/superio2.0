@@ -107,9 +107,9 @@ new #[Title('Profile settings')] class extends Component {
                 </flux:button>
             </div>
         </form>
-
+{{--
         @if ($this->showDeleteUser)
             <livewire:pages::settings.delete-user-form />
-        @endif
+        @endif --}}
     </x-pages::settings.layout>
 </section>
