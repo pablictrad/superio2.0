@@ -23,6 +23,7 @@ class Lom extends Model
         'CUE',
         'idUsuarioCrear',
         'idUsuarioEditar',
+        'llamado_id',
     ];
 
     public function zona()

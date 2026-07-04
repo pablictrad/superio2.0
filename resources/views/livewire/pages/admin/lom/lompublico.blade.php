@@ -69,7 +69,7 @@
             <tbody class="divide-y divide-gray-200">
                 @forelse($this->loms as $lom)
                     <tr wire:key="lom-{{ $lom->idtb_lom }}" class="hover:bg-slate-50 transition-all">
-                        <td class="px-2 py-4 text-xs font-black text-indigo-600">#{{ $lom->idtb_lom }}</td>
+                        <td class="px-2 py-4 text-xs font-black text-indigo-600">#{{ $lom->llamado_id }}</td>
                         <td class="px-2 py-4 text-xs text-gray-700">{{ $lom->nombre_zona ?? '-' }}</td>
                         <td class="px-2 py-4 text-xs font-bold text-gray-800">{{ $lom->instituto_nombre ?? '-' }}</td>
                         <td class="px-2 py-4 text-xs text-gray-700">{{ $lom->carrera_nombre ?? '-' }}</td>

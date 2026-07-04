@@ -45,6 +45,7 @@ new class extends Component {
     #[On('abrirPanel')]
     public function abrirPanel(int $id): void
     {
+         \Log::info('abrirPanel recibido', ['id' => $id]);  // ← temporal
         $this->llamadoId  = $id;
         $this->modalAbierto = true;
         $this->mensaje    = '';
@@ -67,6 +68,7 @@ new class extends Component {
             )
             ->first();
     }
+
 
     private function cargarInscriptos(): void
     {
@@ -191,17 +193,7 @@ new class extends Component {
                     @endif
                 </div>
                 <div class="flex items-center gap-3">
-                    {{-- Botón PDF --}}
-                    <a
-                        href="{{ route('admin.llamados.pdf', $llamadoId) }}"
-                        target="_blank"
-                        class="flex items-center gap-2 bg-red-600 hover:bg-red-700 text-white font-black px-4 py-2 rounded-lg text-xs uppercase shadow-md transition"
-                    >
-                        <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
-                            <path fill-rule="evenodd" d="M4 4a2 2 0 012-2h4.586A2 2 0 0112 2.586L15.414 6A2 2 0 0116 7.414V16a2 2 0 01-2 2H6a2 2 0 01-2-2V4z" clip-rule="evenodd"/>
-                        </svg>
-                        Generar PDF
-                    </a>
+                   
                     <button
                         wire:click="cerrarPanel"
                         class="text-slate-400 hover:text-white hover:bg-slate-700 rounded-full p-1.5 transition"
@@ -390,22 +382,16 @@ new class extends Component {
 
             {{-- ── FOOTER ─────────────────────────────────────────────── --}}
             <div class="flex items-center justify-between px-6 py-4 border-t bg-gray-50 rounded-b-2xl shrink-0">
-                <p class="text-xs text-gray-400">
-                    El PDF se genera con los inscriptos en estado <strong>Habilitado</strong> y <strong>Sin Clasificar</strong>.
-                    Los <em>Pendientes</em> no aparecen en el documento oficial.
+                <p class="text-xs text-gray-900">
+                    El LOM se genera con los inscriptos en estado <strong>Habilitado</strong> y <strong>Sin Clasificar</strong>.
+                    Los <em>Pendientes</em> no aparecen en la publicación oficial.
                 </p>
                 <div class="flex gap-2">
                     <button wire:click="cerrarPanel"
                         class="px-5 py-2 text-xs font-bold text-gray-500 hover:text-gray-800 uppercase transition">
                         Cerrar
                     </button>
-                    <a href="{{ route('admin.llamados.pdf', $llamadoId) }}" target="_blank"
-                       class="flex items-center gap-1.5 bg-red-600 hover:bg-red-700 text-white font-black px-5 py-2 rounded-lg text-xs uppercase shadow-md transition">
-                        <svg class="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 20 20">
-                            <path fill-rule="evenodd" d="M4 4a2 2 0 012-2h4.586A2 2 0 0112 2.586L15.414 6A2 2 0 0116 7.414V16a2 2 0 01-2 2H6a2 2 0 01-2-2V4z" clip-rule="evenodd"/>
-                        </svg>
-                        Descargar PDF
-                    </a>
+                   
                 </div>
             </div>
 

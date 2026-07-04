@@ -1,5 +1,6 @@
 <?php
 use Livewire\Attributes\On;
+use Livewire\Attributes\Computed;
 use Livewire\Volt\Component;
 use App\Models\RelCarreraEspacio;
 use App\Models\Turno;
@@ -10,6 +11,7 @@ use App\Models\Carrera;
 use App\Models\Instituto;
 use Livewire\Attributes\Title;
 use Livewire\WithPagination;
+use Illuminate\Support\Facades\DB;
 
 new #[Title('Relación Carrera - Espacio')] class extends Component
 {
@@ -17,50 +19,87 @@ new #[Title('Relación Carrera - Espacio')] class extends Component
 
     public $buscarCarrera = '';
     public $buscarEspacio = '';
-    public $buscarPerfil = '';
+    public $buscarPerfil  = '';
 
-    public $turnos = [];
-    public $periodos = [];
-    public $carreras = [];
-    public $espacios = [];
-    public $perfiles = [];
+    public $turnos    = [];
+    public $periodos  = [];
+    public $carreras  = [];
+    public $espacios  = [];
+    public $perfiles  = [];
     public $institutos = [];
 
+    // Listas filtradas reactivas
+    public $newCarrerasFiltered  = [];
+    public $editCarrerasFiltered = [];
+
     // Propiedades para nuevo registro
-    public $newCarreraId = '';
-    public $newEspacioId = '';
-    public $newAnio = '';
-    public $newHoraCatedra = '';
-    public $newPeriodoId = '';
-    public $newTurnoId = '';
-    public $newPerfilId = '';
-    public $newInstitutoId = '';
+    public $newCarreraId    = '';
+    public $newEspacioId    = '';
+    public $newAnio         = '';
+    public $newHoraCatedra  = '';
+    public $newPeriodoId    = '';
+    public $newTurnoId      = '';
+    public $newPerfilId     = '';
+    public $newInstitutoId  = '';
 
     // Propiedades para edición
-    public $editId = null;
-    public $editCarreraId = '';
-    public $editEspacioId = '';
-    public $editAnio = '';
+    public $editId         = null;
+    public $editCarreraId  = '';
+    public $editEspacioId  = '';
+    public $editAnio       = '';
     public $editHoraCatedra = '';
-    public $editPeriodoId = '';
-    public $editTurnoId = '';
-    public $editPerfilId = '';
+    public $editPeriodoId  = '';
+    public $editTurnoId    = '';
+    public $editPerfilId   = '';
     public $editInstitutoId = '';
 
-    public function mount()
+    public function mount(): void
     {
-        $this->turnos = Turno::orderBy('nombre_turno')->get()->toArray();
-        $this->periodos = Periodo::orderBy('nombre_periodo')->get()->toArray();
-        $this->carreras = Carrera::orderBy('nombre')->get()->toArray();
-        $this->espacios = Espacio_curricular::orderBy('nombre_espacio')->get()->toArray();
-        $this->perfiles = Perfil::orderBy('nombre_perfil')->get()->toArray();
+        $this->turnos    = Turno::orderBy('nombre_turno')->get()->toArray();
+        $this->periodos  = Periodo::orderBy('nombre_periodo')->get()->toArray();
+        $this->carreras  = Carrera::orderBy('nombre')->get()->toArray();
+        $this->espacios  = Espacio_curricular::orderBy('nombre_espacio')->get()->toArray();
+        $this->perfiles  = Perfil::orderBy('nombre_perfil')->get()->toArray();
         $this->institutos = Instituto::orderBy('nombre')->get()->toArray();
     }
 
-    public function updatedBuscarCarrera() { $this->resetPage(); }
-    public function updatedBuscarEspacio() { $this->resetPage(); }
-    public function updatedBuscarPerfil() { $this->resetPage(); }
+    public function updatedBuscarCarrera(): void { $this->resetPage(); }
+    public function updatedBuscarEspacio(): void { $this->resetPage(); }
+    public function updatedBuscarPerfil(): void  { $this->resetPage(); }
 
+    // ── Filtrado de carreras por instituto (NUEVO) ─────────────────
+    public function updatedNewInstitutoId($value): void
+    {
+      $this->newCarreraId = '';
+        if (!$value) {
+        $this->newCarrerasFiltered = [];
+        return;
+        }
+        $this->newCarrerasFiltered = DB::table('tb_carreras')
+        ->join('rel_instsup_carrera', 'tb_carreras.id', '=', 'rel_instsup_carrera.carrera_id')
+        ->where('rel_instsup_carrera.instituto_id', $value)
+        ->select('tb_carreras.id', 'tb_carreras.nombre')
+        ->orderBy('tb_carreras.nombre')
+        ->get()->toArray();
+            
+    }
+
+    public function updatedEditInstitutoId($value): void
+    {
+        $this->editCarreraId = '';
+        if (!$value) {
+            $this->editCarrerasFiltered = [];
+            return;
+        }
+        $this->editCarrerasFiltered = DB::table('tb_carreras')
+            ->join('rel_instsup_carrera', 'tb_carreras.id', '=', 'rel_instsup_carrera.carrera_id')
+            ->where('rel_instsup_carrera.instituto_id', $value)
+            ->select('tb_carreras.id', 'tb_carreras.nombre')
+            ->orderBy('tb_carreras.nombre')
+            ->get()->toArray();
+    }
+
+    #[Computed(cache: false)]
     public function getRowsProperty()
     {
         $query = RelCarreraEspacio::query()
@@ -84,14 +123,13 @@ new #[Title('Relación Carrera - Espacio')] class extends Component
         return $query->paginate(10);
     }
 
-    public function formatPerfil($texto)
+    public function formatPerfil($texto): string
     {
         if (!$texto) return '';
-        $formatted = str_replace(['/', ';'], "\n", $texto);
-        return trim($formatted);
+        return trim(str_replace(['/', ';'], "\n", $texto));
     }
 
-    public function getPerfilTexto($id)
+    public function getPerfilTexto($id): string
     {
         if (!$id) return 'Sin perfil configurado';
         foreach ($this->perfiles as $p) {
@@ -100,62 +138,75 @@ new #[Title('Relación Carrera - Espacio')] class extends Component
         return 'Sin perfil configurado';
     }
 
-    public function editar($id)
+    public function editar($id): void
     {
         $rel = RelCarreraEspacio::findOrFail($id);
-        $this->editId = $rel->id;
-        $this->editCarreraId = $rel->carrera_id;
-        $this->editEspacioId = $rel->espacio_id;
-        $this->editAnio = $rel->anio;
+        $this->editId          = $rel->id;
+        $this->editCarreraId   = $rel->carrera_id;
+        $this->editEspacioId   = $rel->espacio_id;
+        $this->editAnio        = $rel->anio;
         $this->editHoraCatedra = $rel->hora_catedra;
-        $this->editPeriodoId = $rel->periodo_id;
-        $this->editTurnoId = $rel->turno_id;
-        $this->editPerfilId = $rel->perfil_id;
+        $this->editPeriodoId   = $rel->periodo_id;
+        $this->editTurnoId     = $rel->turno_id;
+        $this->editPerfilId    = $rel->perfil_id;
         $this->editInstitutoId = $rel->instituto_id;
+
+        // Pre-cargar carreras del instituto de este registro
+        if ($rel->instituto_id) {
+            $this->editCarrerasFiltered = DB::table('tb_carreras')
+                ->join('rel_instsup_carrera', 'tb_carreras.id', '=', 'rel_instsup_carrera.carrera_id')
+                ->where('rel_instsup_carrera.instituto_id', $rel->instituto_id)
+                ->select('tb_carreras.id', 'tb_carreras.nombre')
+                ->orderBy('tb_carreras.nombre')
+                ->get()->toArray();
+        } else {
+            $this->editCarrerasFiltered = [];
+        }
+
         $this->dispatch('modal-show', name: 'edit-modal');
     }
 
-    public function guardarEdicion()
+    public function guardarEdicion(): void
     {
         $this->validate([
-            'editCarreraId' => 'required',
-            'editEspacioId' => 'required',
-            'editAnio' => 'required',
-            'editHoraCatedra' => 'required',
+            'editCarreraId'  => 'required',
+            'editEspacioId'  => 'required',
+            'editAnio'       => 'required',
+            'editHoraCatedra'=> 'required',
         ]);
 
         RelCarreraEspacio::find($this->editId)->update([
             'instituto_id' => $this->editInstitutoId,
-            'carrera_id' => $this->editCarreraId,
-            'espacio_id' => $this->editEspacioId,
-            'anio' => $this->editAnio,
+            'carrera_id'   => $this->editCarreraId,
+            'espacio_id'   => $this->editEspacioId,
+            'anio'         => $this->editAnio,
             'hora_catedra' => $this->editHoraCatedra,
-            'periodo_id' => $this->editPeriodoId ?: null,
-            'turno_id' => $this->editTurnoId ?: null,
-            'perfil_id' => $this->editPerfilId ?: null,
+            'periodo_id'   => $this->editPeriodoId  ?: null,
+            'turno_id'     => $this->editTurnoId    ?: null,
+            'perfil_id'    => $this->editPerfilId   ?: null,
         ]);
 
         $this->dispatch('modal-close', name: 'edit-modal');
         $this->dispatch('toast', variant: 'success', heading: 'Éxito', text: 'Registro actualizado.');
     }
 
-    public function guardarNuevo()
+    public function guardarNuevo(): void
     {
         $this->validate([
-            'newCarreraId' => 'required',
-            'newEspacioId' => 'required',
-            'newAnio' => 'required',
-            'newHoraCatedra' => 'required',
+            'newCarreraId'  => 'required',
+            'newEspacioId'  => 'required',
+            'newAnio'       => 'required',
+            'newHoraCatedra'=> 'required',
         ]);
 
         RelCarreraEspacio::create([
-            'carrera_id' => $this->newCarreraId,
-            'espacio_id' => $this->newEspacioId,
-            'anio' => $this->newAnio,
+            'carrera_id'   => $this->newCarreraId,
+            'espacio_id'   => $this->newEspacioId,
+            'anio'         => $this->newAnio,
             'hora_catedra' => $this->newHoraCatedra,
-            'periodo_id' => $this->newPeriodoId ?: null,
-            'turno_id' => $this->newTurnoId ?: null,
-            'perfil_id' => $this->newPerfilId ?: null,
+            'periodo_id'   => $this->newPeriodoId  ?: null,
+            'turno_id'     => $this->newTurnoId    ?: null,
+            'perfil_id'    => $this->newPerfilId   ?: null,
             'instituto_id' => $this->newInstitutoId ?: null,
         ]);
 
@@ -163,8 +214,9 @@ new #[Title('Relación Carrera - Espacio')] class extends Component
         $this->dispatch('modal-close', name: 'create-modal');
         $this->dispatch('toast', variant: 'success', heading: 'Éxito', text: 'Nuevo registro creado.');
     }
+
     #[On('perfilSeleccionado')]
-    public function recibirPerfil($id)
+    public function recibirPerfil($id): void
     {
         if ($this->editId) {
             $this->editPerfilId = $id;
@@ -173,16 +225,17 @@ new #[Title('Relación Carrera - Espacio')] class extends Component
         }
     }
 
-    public function resetNewRecord()
+    public function resetNewRecord(): void
     {
-        $this->newCarreraId = '';
-        $this->newEspacioId = '';
-        $this->newAnio = '';
-        $this->newHoraCatedra = '';
-        $this->newPeriodoId = '';
-        $this->newTurnoId = '';
-        $this->newPerfilId = '';
-        $this->newInstitutoId = '';
+        $this->newCarreraId       = '';
+        $this->newEspacioId       = '';
+        $this->newAnio            = '';
+        $this->newHoraCatedra     = '';
+        $this->newPeriodoId       = '';
+        $this->newTurnoId         = '';
+        $this->newPerfilId        = '';
+        $this->newInstitutoId     = '';
+        $this->newCarrerasFiltered = [];
     }
 };
 ?>
@@ -285,26 +338,36 @@ new #[Title('Relación Carrera - Espacio')] class extends Component
             <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <flux:field>
                     <flux:label>Instituto</flux:label>
-                    <flux:select wire:model="newInstitutoId" searchable size="sm">
+                   <flux:select wire:model.live="newInstitutoId" size="sm">
                         <option value="">Seleccione...</option>
+
                         @foreach($institutos as $i)
-                            <option value="{{ $i['id'] }}">{{ $i['nombre'] }}</option>
+                            <option value="{{ $i['id'] }}">
+                                {{ $i['nombre'] }}
+                            </option>
                         @endforeach
-                    </flux:select>
+                    </flux:select>                   
                 </flux:field>
                 <flux:field>
-                    <flux:label>Carrera</flux:label>
-                    <flux:select wire:model="newCarreraId" searchable size="sm">
+                  <flux:label>Carrera</flux:label>
+
+                    <select
+                        wire:model.live="newCarreraId"
+                        class="w-full border rounded px-2 py-2"
+                    >
                         <option value="">Seleccione...</option>
-                        @foreach($carreras as $c)
-                            <option value="{{ $c['id'] }}">{{ $c['nombre'] }}</option>
+
+                        @foreach($newCarrerasFiltered as $c)
+                            <option value="{{ $c->id }}">
+                                {{ $c->nombre }}
+                            </option>
                         @endforeach
-                    </flux:select>
+                    </select>
                 </flux:field>
 
                 <flux:field>
                     <flux:label>Espacio Curricular</flux:label>
-                    <flux:select wire:model="newEspacioId" searchable size="sm">
+                    <flux:select wire:model="newEspacioId" size="sm">
                         <option value="">Seleccione...</option>
                         @foreach($espacios as $e)
                             <option value="{{ $e['idEspacioCurricular'] }}">{{ $e['nombre_espacio'] }}</option>
@@ -373,24 +436,40 @@ new #[Title('Relación Carrera - Espacio')] class extends Component
             <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <flux:field>
                     <flux:label>Instituto</flux:label>
-                    <flux:select wire:model="editInstitutoId" searchable size="sm">
+                    <flux:select wire:model.live="editInstitutoId
+                    " size="sm">
+                        <option value="">Seleccione...</option>
+
                         @foreach($institutos as $i)
-                            <flux:select.option value="{{ $i['id'] }}">{{ $i['nombre'] }}</flux:select.option>
+                            <option value="{{ $i['id'] }}">
+                            {{ $i['nombre'] }}
+                            </option>
                         @endforeach
-                    </flux:select>
+                    </flux:select> 
                 </flux:field>
                 <flux:field>
                     <flux:label>Carrera</flux:label>
-                    <flux:select wire:model="editCarreraId" searchable size="sm">
-                        @foreach($carreras as $c)
-                            <flux:select.option value="{{ $c['id'] }}">{{ $c['nombre'] }}</flux:select.option>
+
+                    <select
+                        wire:model.live="editCarreraId
+                        "
+                        class="w-full border rounded px-2 py-2"
+                        >
+                        <option value="">Seleccione...</option>
+
+                        @foreach($editCarrerasFiltered
+                        as $c)
+                            <option value="{{ $c->id }}">
+                            {{ $c->nombre }}
+                            </option>
                         @endforeach
-                    </flux:select>
+                    </select>
                 </flux:field>
+
 
                 <flux:field>
                     <flux:label>Espacio Curricular</flux:label>
-                    <flux:select wire:model="editEspacioId" searchable size="sm">
+                    <flux:select wire:model="editEspacioId" size="sm">
                         @foreach($espacios as $e)
                             <flux:select.option value="{{ $e['idEspacioCurricular'] }}">{{ $e['nombre_espacio'] }}</flux:select.option>
                         @endforeach

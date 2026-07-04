@@ -7,6 +7,7 @@ class Instituto extends Model
 {
     public $timestamps = false;
     protected $table = 'tb_instituto_superior';
+    protected $primaryKey = 'id';
     protected $fillable = ['nombre',
      'zona_id',
     'idLocalidad',
@@ -25,10 +26,10 @@ class Instituto extends Model
     }
     public function relCarreraEspacios()
     {
-        return $this->hasMany(RelCarreraEspacio::class, 'instituto_id', 'idtb_instituto');
+        return $this->hasMany(RelCarreraEspacio::class, 'instituto_id', 'id');
     }
     public function relInstitutoCargos()
     {
-        return $this->hasMany(RelInstitutoCargo::class, 'instituto_id', 'idtb_instituto');
+        return $this->hasMany(RelInstitutoCargo::class, 'instituto_id', 'id');
     }
 }

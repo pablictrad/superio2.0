@@ -79,7 +79,7 @@ new #[Title('Gestión de LOM')] class extends Component
             ->join('tb_cargos', 'nuevo_rel_carrera_cargo.cargo_id', '=', 'tb_cargos.id')
             ->join('tb_carreras', 'nuevo_rel_carrera_cargo.carrera_id', '=', 'tb_carreras.id')
             ->join('tb_instituto_superior', 'nuevo_cargo_por_llamado.instituto_id', '=', 'tb_instituto_superior.id')
-            ->leftJoin('tb_periodo_cursado', 'nuevo_rel_carrera_cargo.periodo_id', '=', 'tb_periodo_cursado.idtb_periodo_cursado')
+          
             ->leftJoin('tb_turnos', 'nuevo_rel_carrera_cargo.turno_id', '=', 'tb_turnos.id')
             ->leftJoin('tb_perfil', 'nuevo_rel_carrera_cargo.perfil_id', '=', 'tb_perfil.idtb_perfil')
             ->join('tb_situacion_revista', 'nuevo_cargo_por_llamado.situacion_revista_id', '=', 'tb_situacion_revista.idtb_situacion_revista')
@@ -89,9 +89,8 @@ new #[Title('Gestión de LOM')] class extends Component
                 'tb_cargos.nombre_cargo as detalle',
                 'tb_carreras.nombre as carrera',
                 'tb_instituto_superior.nombre as instituto',
-                'nuevo_rel_carrera_cargo.hora_catedra',
-                'nuevo_rel_carrera_cargo.anio',
-                'tb_periodo_cursado.nombre_periodo as periodo',
+                          
+                
                 'tb_turnos.nombre_turno as turno',
                 'tb_perfil.nombre_perfil as perfil',
                 'nuevo_cargo_por_llamado.horario_cargo as horario_espacio',
@@ -334,12 +333,12 @@ new #[Title('Gestión de LOM')] class extends Component
                                         <div class="text-xs font-black text-slate-700">{{ $det->detalle }}</div>
                                         <div class="mt-1 text-xs text-gray-500 space-y-0.5">
                                             <div>
-                                                <span class="font-bold">{{ $det->hora_catedra }} Hs</span>
+                                               
                                                 <span class="font-bold ml-2">{{ $det->situacion_revista }}</span>
                                             </div>
-                                            <div><span class="font-bold">Período:</span> {{ $det->periodo }}</div>
+                                           
                                             <div>
-                                                <span class="font-bold">Curso:</span> {{ $det->anio }}° Año
+                                                
                                                 <span class="font-bold ml-2">Turno:</span> {{ $det->turno }}
                                             </div>
                                             <div class="break-words whitespace-normal">

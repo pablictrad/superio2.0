@@ -143,6 +143,9 @@ new #[Title('Relación Instituto - Cargo')] class extends Component
             <flux:table.columns>
                 <flux:table.column class="!text-zinc-900 font-bold">Instituto</flux:table.column>
                 <flux:table.column class="!text-zinc-900 font-bold">Cargo</flux:table.column>
+                <flux:table.column class="!text-zinc-900 font-bold">Horas</flux:table.column>
+                <flux:table.column class="!text-zinc-900 font-bold">Perfil</flux:table.column>
+                <flux:table.column class="!text-zinc-900 font-bold">Turno</flux:table.column>
                 <flux:table.column class="w-16 text-center"></flux:table.column>
             </flux:table.columns>
 
@@ -156,7 +159,19 @@ new #[Title('Relación Instituto - Cargo')] class extends Component
                         <flux:table.cell class="text-sm !text-zinc-900 font-bold">
                             {{ $row->cargo->nombre_cargo ?? '-' }}
                         </flux:table.cell>
-
+                         <flux:table.cell class="text-sm !text-zinc-900 font-bold">
+                            {{ $row->cargo->hora_catedra ?? '-' }}
+                        </flux:table.cell>
+                         <flux:table.cell class="text-sm !text-zinc-900 font-bold">
+                             @if($row->perfil_id)
+                                <flux:badge variant="solid" color="white" size="sm" class="font-mono !text-white bg-zinc-900">#{{ $row->perfil_id }}</flux:badge>
+                            @else
+                                <span class="text-zinc-400 text-[10px] italic">Sin ID</span>
+                            @endif
+                        </flux:table.cell>
+                         <flux:table.cell class="text-sm !text-zinc-900 font-bold">
+                               {{ $row->turno->nombre_turno ?? '-' }}
+                        </flux:table.cell>
                         <flux:table.cell class="text-center">
                             <div class="flex justify-center gap-1">
                                 <flux:button

@@ -3,6 +3,8 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use App\Models\Instituto;
 
 class RelCarreraEspacio extends Model
 {
@@ -12,7 +14,7 @@ class RelCarreraEspacio extends Model
 
     public function instituto()
     {
-         return $this->belongsTo(Instituto::class, 'instituto_id', 'idtb_instituto');
+         return $this->belongsTo(Instituto::class, 'instituto_id', 'id');
     }
     public function carrera()
     {

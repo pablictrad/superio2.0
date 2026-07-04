@@ -11,6 +11,8 @@ class RelInstitutoCargo extends Model
     protected $fillable = [
         'instituto_superior_id',
         'cargo_id',
+        'perfil_id',
+        'turno_id',
     ];
 
     public function instituto()
@@ -21,5 +23,15 @@ class RelInstitutoCargo extends Model
     public function cargo()
     {
         return $this->belongsTo(Cargo::class, 'cargo_id');
+    }
+
+    public function perfil()
+    {
+        return $this->belongsTo(Perfil::class, 'perfil_id');
+    }
+
+    public function turno()
+    {
+        return $this->belongsTo(Turno::class, 'turno_id');
     }
 }

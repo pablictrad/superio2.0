@@ -133,13 +133,49 @@ new class extends Component {
             ->distinct()
             ->orderBy('tb_cargos.nombre_cargo')
             ->get()->toArray();
+            
+            $bedel = DB::table('nuevo_rel_carrera_cargo')
+            ->join('tb_cargos', 'nuevo_rel_carrera_cargo.cargo_id', '=', 'tb_cargos.id')
+            ->where('nuevo_rel_carrera_cargo.instituto_id', $institutoId)
+            ->where('tb_cargos.es_por_carrera', 1)
+            ->select(
+             'nuevo_rel_carrera_cargo.id',
+             'tb_cargos.nombre_cargo',
+             'tb_cargos.es_por_carrera',
+             'nuevo_rel_carrera_cargo.carrera_id',
+             DB::raw("'carrera' as tipo_rel")
+            )
+            ->distinct()
+            ->get();
+
+        $porInstituto = DB::table('nuevo_rel_instituto_cargo')
+         ->join('tb_cargos', 'nuevo_rel_instituto_cargo.cargo_id', '=', 'tb_cargos.id')
+         ->where('nuevo_rel_instituto_cargo.instituto_superior_id', $institutoId)
+         ->where('tb_cargos.es_por_carrera', 0)
+         ->select(
+             'nuevo_rel_instituto_cargo.id',
+             'tb_cargos.nombre_cargo',
+             'tb_cargos.es_por_carrera',
+             DB::raw('NULL as carrera_id'),
+             DB::raw("'instituto' as tipo_rel")
+         )
+        ->get();
+
+         $this->cargos = $bedel->concat($porInstituto)
+         ->sortBy('nombre_cargo')
+         ->values()
+         ->toArray();
     }
 
     public function updatedNuevoRelCarreraCargoId($value)
     {
-        $this->cargo_es_por_carrera = false;
-        $this->carreras             = [];
-        $this->carrera_id           = '';
+        [$tipoRel, $idRel] = array_pad(explode(':', $value, 2), 2, null);
+
+        $cargo = collect($this->cargos)->first(function ($c) use ($tipoRel, $idRel) {
+            $c = is_array($c) ? (object)$c : $c;
+            return $c->tipo_rel === $tipoRel && (int)$c->id === (int)$idRel;
+        });
+        $esPorCarrera = $cargo ? (is_array($cargo) ? $cargo['es_por_carrera'] : $cargo->es_por_carrera) : false;
 
         if (!$value) return;
 
@@ -159,22 +195,36 @@ new class extends Component {
     }
 
     public function updatedCarreraId($value)
-    {
-        // En modo cargo no aplica (los cargos se cargan por instituto)
-        if ($this->es_cargo) return;
+{
+    // En modo cargo no aplica (los cargos se cargan por instituto)
+    if ($this->es_cargo) return;
 
-        if ($value && $this->instituto_id) {
-            $this->espacios = DB::table('nuevo_rel_carrera_espacio')
-                ->join('tb_espacioscurriculares', 'nuevo_rel_carrera_espacio.espacio_id', '=', 'tb_espacioscurriculares.idEspacioCurricular')
-                ->where('nuevo_rel_carrera_espacio.carrera_id', $value)
-                ->where('nuevo_rel_carrera_espacio.instituto_id', $this->instituto_id)
-                ->select('nuevo_rel_carrera_espacio.id', 'tb_espacioscurriculares.nombre_espacio')
-                ->get()->toArray();
-        } else {
-            $this->espacios = [];
-        }
-        $this->nuevo_rel_carrera_espacio_id = '';
+    \Log::info('updatedCarreraId', [
+        'carrera_id'   => $value,
+        'instituto_id' => $this->instituto_id,
+        'es_cargo'     => $this->es_cargo,
+    ]);
+
+    if ($value && $this->instituto_id) {
+        $rows = DB::table('nuevo_rel_carrera_espacio')
+            ->join('tb_espacioscurriculares', 'nuevo_rel_carrera_espacio.espacio_id', '=', 'tb_espacioscurriculares.idEspacioCurricular')
+            ->where('nuevo_rel_carrera_espacio.carrera_id', $value)
+            ->where('nuevo_rel_carrera_espacio.instituto_id', $this->instituto_id)
+            ->select('nuevo_rel_carrera_espacio.id', 'tb_espacioscurriculares.nombre_espacio')
+            ->get();
+
+        \Log::info('espacios encontrados', [
+            'count'      => $rows->count(),
+            'instituto_id' => $this->instituto_id,
+            'carrera_id'   => $value,
+        ]);
+
+        $this->espacios = $rows->toArray();
+    } else {
+        $this->espacios = [];
     }
+    $this->nuevo_rel_carrera_espacio_id = '';
+}
 
     public function updatedIdtipoLlamado($value)
     {
@@ -241,18 +291,21 @@ new class extends Component {
                 $this->validate(['carrera_id' => 'required']);
             }
 
-            $rel = DB::table('nuevo_rel_carrera_cargo')
-                ->join('tb_cargos',  'nuevo_rel_carrera_cargo.cargo_id', '=', 'tb_cargos.id')
-                ->leftJoin('tb_perfil', 'nuevo_rel_carrera_cargo.perfil_id', '=', 'tb_perfil.idtb_perfil')
-                ->leftJoin('tb_turnos', 'nuevo_rel_carrera_cargo.turno_id', '=', 'tb_turnos.id')
-                ->where('nuevo_rel_carrera_cargo.id', $this->nuevo_rel_carrera_cargo_id)
-                ->select(
-                    'tb_cargos.nombre_cargo as nombre',
-                    'tb_cargos.es_por_carrera',
+            [$tipoRel, $idRel] = array_pad(explode(':', $this->nuevo_rel_carrera_cargo_id, 2), 2, null);
+
+        $tabla = $tipoRel === 'carrera' ? 'nuevo_rel_carrera_cargo' : 'nuevo_rel_instituto_cargo';
+
+            $rel = DB::table($tabla)
+                ->join('tb_cargos',  "$tabla.cargo_id", '=', 'tb_cargos.id')
+                ->leftJoin('tb_perfil', "$tabla.perfil_id", '=', 'tb_perfil.idtb_perfil')
+            ->leftJoin('tb_turnos', "$tabla.turno_id", '=', 'tb_turnos.id')
+                ->where("$tabla.id", $idRel)
+            ->select(
+                    'tb_cargos.nombre_cargo as nombre',             'tb_cargos.es_por_carrera',
                     'tb_cargos.hora_catedra',
-                    'tb_perfil.nombre_perfil as perfil',
-                    'tb_turnos.nombre_turno as turno',
-                )->first();
+                'tb_perfil.nombre_perfil as perfil',
+                'tb_turnos.nombre_turno as turno',
+            )->first();
 
             if (!$rel) {
                 session()->flash('error', 'No se encontró la información del cargo seleccionado.');
@@ -270,7 +323,8 @@ new class extends Component {
                 'carrera_id'           => $carreraId,
                 'carrera_nombre'       => $carreraNombre,
                 'tipo'                 => 'Cargo',
-                'id_rel'               => $this->nuevo_rel_carrera_cargo_id,
+                'tipo_rel'             => $tipoRel,
+                'id_rel'               => $idRel,
                 'nombre'               => $rel->nombre,
                 'hora_catedra'         => $rel->hora_catedra,
                 'anio'                 => null,
@@ -313,7 +367,8 @@ new class extends Component {
                 'carrera_id'           => $this->carrera_id,
                 'carrera_nombre'       => DB::table('tb_carreras')->where('id', $this->carrera_id)->value('nombre'),
                 'tipo'                 => 'Espacio',
-                'id_rel'               => $this->nuevo_rel_carrera_espacio_id,
+                'tipo_rel'             => $tipoRel,
+                'id_rel'               => $idRel,
                 'nombre'               => $rel->nombre,
                 'hora_catedra'         => $rel->hora_catedra,
                 'anio'                 => $rel->anio,
@@ -361,17 +416,13 @@ new class extends Component {
 
         if ($this->es_cargo) {
             $this->cargarCargosPorInstituto((int)$this->instituto_id);
-            $this->nuevo_rel_carrera_cargo_id   = $det['id_rel'];
+          
+            $tipoRel = $det['tipo_rel'] ?? 'carrera';
+            $this->nuevo_rel_carrera_cargo_id   = $tipoRel . ':' . $det['id_rel'];
             $this->nuevo_rel_carrera_espacio_id = '';
             $this->carreras                     = [];
 
-            // Detectar si es Bedel
-            $esPorCarrera = DB::table('nuevo_rel_carrera_cargo')
-                ->join('tb_cargos', 'nuevo_rel_carrera_cargo.cargo_id', '=', 'tb_cargos.id')
-                ->where('nuevo_rel_carrera_cargo.id', $det['id_rel'])
-                ->value('tb_cargos.es_por_carrera');
-
-            $this->cargo_es_por_carrera = (bool) $esPorCarrera;
+           $this->cargo_es_por_carrera = ($tipoRel === 'carrera');
             if ($this->cargo_es_por_carrera && !empty($det['carrera_id'])) {
                 $this->carreras = DB::table('tb_carreras')
                     ->join('rel_instsup_carrera', 'tb_carreras.id', '=', 'rel_instsup_carrera.carrera_id')
@@ -451,12 +502,13 @@ new class extends Component {
                     ]);
                 } else {
                     DB::table('nuevo_cargo_por_llamado')->insert([
-                        'llamado_id'                 => $llamadoId,
-                        'instituto_id'               => $detalle['instituto_id'],
-                        'nuevo_rel_carrera_cargo_id' => $detalle['id_rel'],
-                        'horario_cargo'              => $detalle['horario_espacio'],
-                        'situacion_revista_id'       => $detalle['situacion_revista_id'],
-                        'created_at'                 => now(),
+                       'llamado_id'                   => $llamadoId,
+                    'instituto_id'                 => $detalle['instituto_id'],
+                    'nuevo_rel_carrera_cargo_id'   => $detalle['tipo_rel'] === 'carrera'   ? $detalle['id_rel'] : null,
+                    'nuevo_rel_instituto_cargo_id' => $detalle['tipo_rel'] === 'instituto' ? $detalle['id_rel'] : null,
+                    'horario_cargo'                => $detalle['horario_espacio'],
+                    'situacion_revista_id'         => $detalle['situacion_revista_id'],
+                    'created_at'                   => now(),
                     ]);
                 }
             }
@@ -573,13 +625,13 @@ new class extends Component {
             ];
         }
  
-        // Cargar cargos — leftJoin en carreras (pueden ser por instituto sin carrera)
-        $cargos = DB::table('nuevo_cargo_por_llamado')
-            ->join('nuevo_rel_carrera_cargo',  'nuevo_cargo_por_llamado.nuevo_rel_carrera_cargo_id', '=', 'nuevo_rel_carrera_cargo.id')
-            ->join('tb_cargos',                'nuevo_rel_carrera_cargo.cargo_id',   '=', 'tb_cargos.id')
-            ->leftJoin('tb_carreras',          'nuevo_rel_carrera_cargo.carrera_id', '=', 'tb_carreras.id')
-            ->leftJoin('tb_perfil',            'nuevo_rel_carrera_cargo.perfil_id',  '=', 'tb_perfil.idtb_perfil')
-            ->leftJoin('tb_turnos',            'nuevo_rel_carrera_cargo.turno_id',   '=', 'tb_turnos.id')
+            $cargos = DB::table('nuevo_cargo_por_llamado')
+             ->leftJoin('nuevo_rel_carrera_cargo',   'nuevo_cargo_por_llamado.nuevo_rel_carrera_cargo_id',   '=', 'nuevo_rel_carrera_cargo.id')
+            ->leftJoin('nuevo_rel_instituto_cargo', 'nuevo_cargo_por_llamado.nuevo_rel_instituto_cargo_id', '=', 'nuevo_rel_instituto_cargo.id')
+            ->leftJoin('tb_cargos', DB::raw('COALESCE(nuevo_rel_carrera_cargo.cargo_id, nuevo_rel_instituto_cargo.cargo_id)'), '=', 'tb_cargos.id')
+            ->leftJoin('tb_carreras', 'nuevo_rel_carrera_cargo.carrera_id', '=', 'tb_carreras.id')
+            ->leftJoin('tb_perfil', DB::raw('COALESCE(nuevo_rel_carrera_cargo.perfil_id, nuevo_rel_instituto_cargo.perfil_id)'), '=', 'tb_perfil.idtb_perfil')
+            ->leftJoin('tb_turnos', DB::raw('COALESCE(nuevo_rel_carrera_cargo.turno_id, nuevo_rel_instituto_cargo.turno_id)'), '=', 'tb_turnos.id')
             ->join('tb_instituto_superior',    'nuevo_cargo_por_llamado.instituto_id', '=', 'tb_instituto_superior.id')
             ->join('tb_situacion_revista',     'nuevo_cargo_por_llamado.situacion_revista_id', '=', 'tb_situacion_revista.idtb_situacion_revista')
             ->where('nuevo_cargo_por_llamado.llamado_id', $id)
@@ -589,7 +641,10 @@ new class extends Component {
                 'nuevo_rel_carrera_cargo.carrera_id',
                 'tb_carreras.nombre as carrera_nombre',
                 'tb_cargos.nombre_cargo as nombre',
-                'nuevo_rel_carrera_cargo.id as id_rel',
+
+                 DB::raw('COALESCE(nuevo_cargo_por_llamado.nuevo_rel_carrera_cargo_id, nuevo_cargo_por_llamado.nuevo_rel_instituto_cargo_id) as id_rel'),
+                 DB::raw("CASE WHEN nuevo_cargo_por_llamado.nuevo_rel_carrera_cargo_id IS NOT NULL THEN 'carrera' ELSE 'instituto' END as tipo_rel"),
+
                 'tb_cargos.hora_catedra',
                 'tb_perfil.nombre_perfil as perfil',
                 'tb_turnos.nombre_turno as turno',
@@ -606,6 +661,7 @@ new class extends Component {
                 'carrera_id'           => $c->carrera_id,
                 'carrera_nombre'       => $c->carrera_nombre,
                 'tipo'                 => 'Cargo',
+                'tipo_rel'             => $c->tipo_rel,
                 'id_rel'               => $c->id_rel,
                 'nombre'               => $c->nombre,
                 'hora_catedra'         => $c->hora_catedra,
@@ -661,12 +717,13 @@ new class extends Component {
                     ]);
                 } else {
                     DB::table('nuevo_cargo_por_llamado')->insert([
-                        'llamado_id'                 => $this->editando,
-                        'instituto_id'               => $detalle['instituto_id'],
-                        'nuevo_rel_carrera_cargo_id' => $detalle['id_rel'],
-                        'horario_cargo'              => $detalle['horario_espacio'],
-                        'situacion_revista_id'       => $detalle['situacion_revista_id'],
-                        'created_at'                 => now(),
+                          'llamado_id'                   => $this->editando,
+                    'instituto_id'                 => $detalle['instituto_id'],
+                    'nuevo_rel_carrera_cargo_id'   => $detalle['tipo_rel'] === 'carrera'   ? $detalle['id_rel'] : null,
+                    'nuevo_rel_instituto_cargo_id' => $detalle['tipo_rel'] === 'instituto' ? $detalle['id_rel'] : null,
+                    'horario_cargo'                => $detalle['horario_espacio'],
+                    'situacion_revista_id'         => $detalle['situacion_revista_id'],
+                    'created_at'                   => now(),
                     ]);
                 }
             }
@@ -798,17 +855,16 @@ new class extends Component {
  
         return $rows;
     }
+   
 }; 
 ?>
 
 <div class="p-6 bg-white rounded-xl shadow-lg border border-gray-100 max-w-6xl mx-auto my-8">
-    <div class="hidden">
-         @livewire('pages.admin.lom.gestionar-inscriptos')
-    </div>
+  
    
     {{-- HEADER --}}
     <div class="flex justify-between items-center mb-6 border-b pb-4">
-        <h1 class="text-3xl font-bold text-gray-800">Crear Nuevo Llamado</h1>
+        <h1 class="text-3xl font-bold text-gray-800">Crear Nueva Convocatoria</h1>
         <div class="flex items-center space-x-2">
             <span class="text-sm font-medium text-gray-500 uppercase">Estado actual:</span>
             @if($idtb_tipoestado == 8)
@@ -980,7 +1036,7 @@ new class extends Component {
 
                             @foreach($cargos as $ca)
                                 @php $ca = is_array($ca) ? (object)$ca : $ca; @endphp
-                                <option value="{{ $ca->id }}">
+                                <option value="{{ $ca->tipo_rel }}:{{ $ca->id }}">
                                     {{ $ca->nombre_cargo }}
                                 </option>
                             @endforeach
@@ -1096,7 +1152,7 @@ new class extends Component {
             <button type="submit"
                     class="bg-indigo-600 hover:bg-indigo-700 text-white font-black py-4 px-12 rounded-xl shadow-xl hover:shadow-2xl transform hover:-translate-y-1 transition duration-200 flex items-center text-lg">
                 <svg class="w-6 h-6 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path></svg>
-                Publicar Llamado Ahora
+                Cargar
             </button>
         </div>
     </form>
@@ -1105,7 +1161,7 @@ new class extends Component {
     <div wire:poll.30s="cerrarVencidos" class="mt-20">
         <h2 class="text-3xl font-black text-gray-800 mb-8 flex items-center pb-2 border-b-4 border-indigo-500 w-fit">
             <svg class="w-8 h-8 mr-3 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 10h16M4 14h16M4 18h16"></path></svg>
-            Historial de Llamados
+            Historial de Convocatorias
         </h2>
 
         <div class="overflow-x-auto rounded-2xl border border-gray-300 shadow-2xl">
@@ -1456,7 +1512,7 @@ new class extends Component {
 
                                             @foreach($cargos as $ca)
                                                 @php $ca = is_array($ca) ? (object)$ca : $ca; @endphp
-                                                <option value="{{ $ca->id }}">
+                                               <option value="{{ $ca->tipo_rel }}:{{ $ca->id }}">
                                                     {{ $ca->nombre_cargo }}
                                                 </option>
                                             @endforeach
@@ -1608,5 +1664,7 @@ new class extends Component {
             </div>
         </div>
     @endif
-
+    <div>
+        <livewire:pages.admin.lom.gestionar-inscriptos />
+    </div>
 </div>

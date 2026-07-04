@@ -129,7 +129,7 @@ class extends Component
                         @auth
                             <a href="{{ route('dashboard') }}" class="btn-volver bg-indigo-600 hover:bg-indigo-700 text-white">Volver</a>
                         @else
-                        <a href="{{ route('home') }}" class="btn btn-volver">Volver</a>
+                        <a href="{{ route('home') }}" class="btn btn-volver bg-indigo-600 hover:bg-indigo-700 text-white">Volver</a>
                         @endauth
                     </div>
      @endif                

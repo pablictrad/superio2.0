@@ -12,7 +12,7 @@ class RelCarreraCargo extends Model
 
     public function instituto()
     {
-         return $this->belongsTo(Instituto::class, 'instituto_id', 'idtb_instituto');
+         return $this->belongsTo(Instituto::class, 'instituto_id', 'id');
     }
 
     public function carrera()
