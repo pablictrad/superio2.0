@@ -73,14 +73,15 @@ class extends Component
             ->get()->groupBy('llamado_id');
 
         $cargosPorLlamado = DB::table('nuevo_cargo_por_llamado')
-            ->join('nuevo_rel_carrera_cargo', 'nuevo_cargo_por_llamado.nuevo_rel_carrera_cargo_id', '=', 'nuevo_rel_carrera_cargo.id')
-            ->join('tb_cargos', 'nuevo_rel_carrera_cargo.cargo_id', '=', 'tb_cargos.id')
-            ->leftJoin('tb_carreras', 'nuevo_rel_carrera_cargo.carrera_id', '=', 'tb_carreras.id')
-            ->join('tb_instituto_superior', 'nuevo_cargo_por_llamado.instituto_id', '=', 'tb_instituto_superior.id')
-            ->leftJoin('tb_perfil', 'nuevo_rel_carrera_cargo.perfil_id', '=', 'tb_perfil.idtb_perfil')
-            ->join('tb_situacion_revista', 'nuevo_cargo_por_llamado.situacion_revista_id', '=', 'tb_situacion_revista.idtb_situacion_revista')
-            ->whereIn('nuevo_cargo_por_llamado.llamado_id', $ids)
-            ->select(
+          ->join('nuevo_rel_instituto_cargo', 'nuevo_cargo_por_llamado.nuevo_rel_instituto_cargo_id', '=', 'nuevo_rel_instituto_cargo.id')
+          ->join('tb_cargos', 'nuevo_rel_instituto_cargo.cargo_id', '=', 'tb_cargos.id')
+          ->leftJoin('tb_carreras', 'nuevo_cargo_por_llamado.carrera_id', '=', 'tb_carreras.id')
+          ->join('tb_instituto_superior', 'nuevo_cargo_por_llamado.instituto_id', '=', 'tb_instituto_superior.id')
+          ->leftJoin('tb_perfil', 'nuevo_rel_instituto_cargo.perfil_id', '=', 'tb_perfil.idtb_perfil')
+          ->leftJoin('tb_turnos', 'nuevo_rel_instituto_cargo.turno_id', '=', 'tb_turnos.id')
+          ->join('tb_situacion_revista', 'nuevo_cargo_por_llamado.situacion_revista_id', '=', 'tb_situacion_revista.idtb_situacion_revista')
+          ->whereIn('nuevo_cargo_por_llamado.llamado_id', $ids)
+          ->select(
                 'nuevo_cargo_por_llamado.llamado_id',
                 'tb_cargos.nombre_cargo as detalle',
                 'tb_carreras.nombre as carrera',
@@ -88,7 +89,7 @@ class extends Component
                 'tb_cargos.hora_catedra',
                 DB::raw('NULL as anio'),
                 DB::raw('NULL as periodo'),
-                DB::raw('NULL as turno'),
+                'tb_turnos.nombre_turno as turno',
                 'tb_perfil.nombre_perfil as perfil',
                 'nuevo_cargo_por_llamado.horario_cargo as horario_espacio',
                 'tb_situacion_revista.nombre_situacion_revista as situacion_revista',
@@ -215,8 +216,10 @@ class extends Component
                                                 @if($det->anio)
                                                 <div>
                                                     <span class="font-bold">Curso:</span> {{ $det->anio }}° Año
-                                                    @if($det->turno)
-                                                        <span class="font-bold ml-1">Turno:</span> {{ $det->turno }}
+                                                   @if($det->turno)
+                                                    <div>
+                                                        <span class="font-bold">Turno:</span> {{ $det->turno }}
+                                                    </div>
                                                     @endif
                                                 </div>
                                                 @endif

@@ -1,10 +1,13 @@
 <?php
 use Livewire\Attributes\Title;
+use Livewire\Attributes\On;
 use Livewire\Volt\Component;
 use Livewire\WithPagination;
 use App\Models\RelInstitutoCargo;
 use App\Models\Instituto;
 use App\Models\Cargo;
+use App\Models\Turno;
+use App\Models\Perfil;
 
 new #[Title('Relación Instituto - Cargo')] class extends Component
 {
@@ -15,20 +18,28 @@ new #[Title('Relación Instituto - Cargo')] class extends Component
 
     public $institutos = [];
     public $cargos     = [];
+    public $turnos     = [];
+    public $perfiles   = [];
 
     // Nuevo registro
     public $newInstitutoId = '';
     public $newCargoId     = '';
+    public $newTurnoId     = '';
+    public $newPerfilId    = '';
 
     // Edición
     public $editId         = null;
     public $editInstitutoId = '';
     public $editCargoId    = '';
-
+    public $editTurnoId    = '';
+    public $editPerfilId   = '';
+    
     public function mount()
     {
         $this->institutos = Instituto::orderBy('nombre')->get()->toArray();
         $this->cargos     = Cargo::orderBy('nombre_cargo')->get()->toArray();
+        $this->turnos     = Turno::orderBy('nombre_turno')->get()->toArray();
+        $this->perfiles   = Perfil::orderBy('nombre_perfil')->get()->toArray();
     }
 
     public function updatedBuscarInstituto() { $this->resetPage(); }
@@ -37,7 +48,7 @@ new #[Title('Relación Instituto - Cargo')] class extends Component
     public function getRowsProperty()
     {
         $query = RelInstitutoCargo::query()
-            ->with(['instituto', 'cargo']);
+            ->with(['instituto', 'cargo', 'turno', 'perfil']);
 
         if ($this->buscarInstituto) {
             $query->whereHas('instituto', fn($q) =>
@@ -51,13 +62,28 @@ new #[Title('Relación Instituto - Cargo')] class extends Component
 
         return $query->paginate(10);
     }
+    public function formatPerfil($texto): string
+    {
+        if (!$texto) return '';
+        return trim(str_replace(['/', ';'], "\n", $texto));
+    }
 
+    public function getPerfilTexto($id): string
+    {
+        if (!$id) return 'Sin perfil configurado';
+        foreach ($this->perfiles as $p) {
+            if ($p['idtb_perfil'] == $id) return $this->formatPerfil($p['nombre_perfil']);
+        }
+        return 'Sin perfil configurado';
+    }
     public function editar($id)
     {
         $rel = RelInstitutoCargo::findOrFail($id);
         $this->editId          = $rel->id;
         $this->editInstitutoId = $rel->instituto_superior_id;
         $this->editCargoId     = $rel->cargo_id;
+        $this->editTurnoId     = $rel->turno_id;
+        $this->editPerfilId    = $rel->perfil_id;
 
         $this->dispatch('modal-show', name: 'edit-modal');
     }
@@ -72,6 +98,8 @@ new #[Title('Relación Instituto - Cargo')] class extends Component
         RelInstitutoCargo::find($this->editId)->update([
             'instituto_superior_id' => $this->editInstitutoId,
             'cargo_id'              => $this->editCargoId,
+            'turno_id'              => $this->editTurnoId  ?: null,
+            'perfil_id'             => $this->editPerfilId ?: null,
         ]);
 
         $this->dispatch('modal-close', name: 'edit-modal');
@@ -88,11 +116,22 @@ new #[Title('Relación Instituto - Cargo')] class extends Component
         RelInstitutoCargo::create([
             'instituto_superior_id' => $this->newInstitutoId,
             'cargo_id'              => $this->newCargoId,
+            'turno_id'              => $this->newTurnoId  ?: null,
+            'perfil_id'             => $this->newPerfilId ?: null,
         ]);
 
         $this->resetNewRecord();
         $this->dispatch('modal-close', name: 'create-modal');
         $this->dispatch('toast', variant: 'success', heading: 'Éxito', text: 'Nuevo registro creado.');
+    }
+    #[On('perfilSeleccionado')]
+    public function recibirPerfil($id): void
+    {
+        if ($this->editId) {
+            $this->editPerfilId = $id;
+        } else {
+            $this->newPerfilId = $id;
+        }
     }
 
     public function eliminar($id)
@@ -105,6 +144,8 @@ new #[Title('Relación Instituto - Cargo')] class extends Component
     {
         $this->newInstitutoId = '';
         $this->newCargoId     = '';
+        $this->newTurnoId     = '';
+        $this->newPerfilId    = '';
     }
 };
 ?>
@@ -222,7 +263,24 @@ new #[Title('Relación Instituto - Cargo')] class extends Component
                 </flux:select>
                 <flux:error name="newCargoId" />
             </flux:field>
+            <flux:field>
+                 <flux:label>Turno</flux:label>
+                 <flux:select wire:model="newTurnoId" size="sm">
+                     <option value="">Seleccione...</option>
+                     @foreach($turnos as $t)
+                         <option value="{{ $t['id'] }}">{{ $t['nombre_turno'] }}</option>
+                     @endforeach
+                 </flux:select>
+             </flux:field>
 
+             <flux:field>
+                 <livewire:perfil />
+                 <div class="mt-4">
+                     <div class="w-full text-xs">
+                         {{ $this->getPerfilTexto($newPerfilId) }}
+                     </div>
+                 </div>
+             </flux:field>
             <div class="flex justify-end gap-2 pt-4 border-t border-zinc-100 dark:border-zinc-800">
                 <flux:modal.close>
                     <flux:button variant="ghost" size="sm">Cancelar</flux:button>
@@ -263,7 +321,24 @@ new #[Title('Relación Instituto - Cargo')] class extends Component
                 </flux:select>
                 <flux:error name="editCargoId" />
             </flux:field>
+            <flux:field>
+                 <flux:label>Turno</flux:label>
+                 <flux:select wire:model="editTurnoId" size="sm">
+                     <option value="">Seleccione...</option>
+                     @foreach($turnos as $t)
+                         <option value="{{ $t['id'] }}">{{ $t['nombre_turno'] }}</option>
+                     @endforeach
+                 </flux:select>
+             </flux:field>
 
+             <flux:field>
+                 <livewire:perfil />
+                 <div class="mt-4">
+                     <div class="w-full text-xs">
+                         {{ $this->getPerfilTexto($editPerfilId) }}
+                     </div>
+                 </div>
+             </flux:field>
             <div class="flex justify-end gap-2 pt-4 border-t border-zinc-100 dark:border-zinc-800">
                 <flux:modal.close>
                     <flux:button variant="ghost" size="sm">Cancelar</flux:button>

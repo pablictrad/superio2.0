@@ -119,72 +119,37 @@ new class extends Component {
         }
     }
 
-    private function cargarCargosPorInstituto(int $institutoId): void
+   private function cargarCargosPorInstituto(int $institutoId): void
     {
-        $this->cargos = DB::table('nuevo_rel_carrera_cargo')
-            ->join('tb_cargos', 'nuevo_rel_carrera_cargo.cargo_id', '=', 'tb_cargos.id')
-            ->where('nuevo_rel_carrera_cargo.instituto_id', $institutoId)
+        $this->cargos = DB::table('nuevo_rel_instituto_cargo')
+            ->join('tb_cargos', 'nuevo_rel_instituto_cargo.cargo_id', '=', 'tb_cargos.id')
+            ->where('nuevo_rel_instituto_cargo.instituto_superior_id', $institutoId)
             ->select(
-                'nuevo_rel_carrera_cargo.id',
+                'nuevo_rel_instituto_cargo.id',
                 'tb_cargos.nombre_cargo',
                 'tb_cargos.es_por_carrera',
-                'nuevo_rel_carrera_cargo.carrera_id',
             )
             ->distinct()
             ->orderBy('tb_cargos.nombre_cargo')
             ->get()->toArray();
-            
-            $bedel = DB::table('nuevo_rel_carrera_cargo')
-            ->join('tb_cargos', 'nuevo_rel_carrera_cargo.cargo_id', '=', 'tb_cargos.id')
-            ->where('nuevo_rel_carrera_cargo.instituto_id', $institutoId)
-            ->where('tb_cargos.es_por_carrera', 1)
-            ->select(
-             'nuevo_rel_carrera_cargo.id',
-             'tb_cargos.nombre_cargo',
-             'tb_cargos.es_por_carrera',
-             'nuevo_rel_carrera_cargo.carrera_id',
-             DB::raw("'carrera' as tipo_rel")
-            )
-            ->distinct()
-            ->get();
-
-        $porInstituto = DB::table('nuevo_rel_instituto_cargo')
-         ->join('tb_cargos', 'nuevo_rel_instituto_cargo.cargo_id', '=', 'tb_cargos.id')
-         ->where('nuevo_rel_instituto_cargo.instituto_superior_id', $institutoId)
-         ->where('tb_cargos.es_por_carrera', 0)
-         ->select(
-             'nuevo_rel_instituto_cargo.id',
-             'tb_cargos.nombre_cargo',
-             'tb_cargos.es_por_carrera',
-             DB::raw('NULL as carrera_id'),
-             DB::raw("'instituto' as tipo_rel")
-         )
-        ->get();
-
-         $this->cargos = $bedel->concat($porInstituto)
-         ->sortBy('nombre_cargo')
-         ->values()
-         ->toArray();
     }
 
-    public function updatedNuevoRelCarreraCargoId($value)
+   public function updatedNuevoRelCarreraCargoId($value)
     {
-        [$tipoRel, $idRel] = array_pad(explode(':', $value, 2), 2, null);
-
-        $cargo = collect($this->cargos)->first(function ($c) use ($tipoRel, $idRel) {
-            $c = is_array($c) ? (object)$c : $c;
-            return $c->tipo_rel === $tipoRel && (int)$c->id === (int)$idRel;
-        });
-        $esPorCarrera = $cargo ? (is_array($cargo) ? $cargo['es_por_carrera'] : $cargo->es_por_carrera) : false;
+        $this->cargo_es_por_carrera = false;
+        $this->carreras             = [];
+        $this->carrera_id           = '';
 
         if (!$value) return;
 
-        $cargo = collect($this->cargos)->firstWhere('id', (int)$value);
+        $cargo = collect($this->cargos)->first(function ($c) use ($value) {
+            $c = is_array($c) ? (object)$c : $c;
+            return (int)$c->id === (int)$value;
+        });
         $esPorCarrera = $cargo ? (is_array($cargo) ? $cargo['es_por_carrera'] : $cargo->es_por_carrera) : false;
 
         if ($esPorCarrera) {
             $this->cargo_es_por_carrera = true;
-            // Bedel: cargar carreras del instituto para selección
             $this->carreras = DB::table('tb_carreras')
                 ->join('rel_instsup_carrera', 'tb_carreras.id', '=', 'rel_instsup_carrera.carrera_id')
                 ->where('rel_instsup_carrera.instituto_id', $this->instituto_id)
@@ -285,24 +250,21 @@ new class extends Component {
         $instituto_nombre = DB::table('tb_instituto_superior')
             ->where('id', $this->instituto_id)->value('nombre');
 
-        if ($this->es_cargo) {
-            $this->validate(['nuevo_rel_carrera_cargo_id' => 'required']);
-            if ($this->cargo_es_por_carrera) {
-                $this->validate(['carrera_id' => 'required']);
-            }
+       if ($this->es_cargo) {
+        $this->validate(['nuevo_rel_carrera_cargo_id' => 'required']);
+        if ($this->cargo_es_por_carrera) {
+            $this->validate(['carrera_id' => 'required']);
+        }
 
-            [$tipoRel, $idRel] = array_pad(explode(':', $this->nuevo_rel_carrera_cargo_id, 2), 2, null);
-
-        $tabla = $tipoRel === 'carrera' ? 'nuevo_rel_carrera_cargo' : 'nuevo_rel_instituto_cargo';
-
-            $rel = DB::table($tabla)
-                ->join('tb_cargos',  "$tabla.cargo_id", '=', 'tb_cargos.id')
-                ->leftJoin('tb_perfil', "$tabla.perfil_id", '=', 'tb_perfil.idtb_perfil')
-            ->leftJoin('tb_turnos', "$tabla.turno_id", '=', 'tb_turnos.id')
-                ->where("$tabla.id", $idRel)
+           $rel = DB::table('nuevo_rel_instituto_cargo')
+            ->join('tb_cargos',  'nuevo_rel_instituto_cargo.cargo_id', '=', 'tb_cargos.id')
+            ->leftJoin('tb_perfil', 'nuevo_rel_instituto_cargo.perfil_id', '=', 'tb_perfil.idtb_perfil')
+            ->leftJoin('tb_turnos', 'nuevo_rel_instituto_cargo.turno_id', '=', 'tb_turnos.id')
+            ->where('nuevo_rel_instituto_cargo.id', $this->nuevo_rel_carrera_cargo_id)
             ->select(
-                    'tb_cargos.nombre_cargo as nombre',             'tb_cargos.es_por_carrera',
-                    'tb_cargos.hora_catedra',
+                'tb_cargos.nombre_cargo as nombre',
+                'tb_cargos.es_por_carrera',
+                'tb_cargos.hora_catedra',
                 'tb_perfil.nombre_perfil as perfil',
                 'tb_turnos.nombre_turno as turno',
             )->first();
@@ -312,34 +274,29 @@ new class extends Component {
                 return;
             }
 
-            $carreraId     = $this->cargo_es_por_carrera ? $this->carrera_id : null;
-            $carreraNombre = $carreraId
-                ? DB::table('tb_carreras')->where('id', $carreraId)->value('nombre')
-                : null;
+              $carreraId     = $this->cargo_es_por_carrera ? $this->carrera_id : null;
+              $carreraNombre = $carreraId
+                    ? DB::table('tb_carreras')->where('id', $carreraId)->value('nombre')
+                    : null;
 
             $nuevo_item = [
-                'instituto_id'         => $this->instituto_id,
-                'instituto_nombre'     => $instituto_nombre,
-                'carrera_id'           => $carreraId,
-                'carrera_nombre'       => $carreraNombre,
-                'tipo'                 => 'Cargo',
-                'tipo_rel'             => $tipoRel,
-                'id_rel'               => $idRel,
-                'nombre'               => $rel->nombre,
-                'hora_catedra'         => $rel->hora_catedra,
-                'anio'                 => null,
-                'periodo'              => null,
-                'turno'                => $rel->turno,
-                'perfil'               => $rel->perfil,
-                'horario_espacio'      => $this->horario_espacio,
-                'situacion_revista_id' => $this->situacion_revista_id,
-                'situacion_revista'    => $sit_revista,
-            ];
-        } else {
-            $this->validate([
-                'carrera_id'                   => 'required',
-                'nuevo_rel_carrera_espacio_id' => 'required',
-            ]);
+            'instituto_id'         => $this->instituto_id,
+            'instituto_nombre'     => $instituto_nombre,
+            'carrera_id'           => $carreraId,
+            'carrera_nombre'       => $carreraNombre,
+            'tipo'                 => 'Cargo',
+            'id_rel'               => $this->nuevo_rel_carrera_cargo_id,
+            'nombre'               => $rel->nombre,
+            'hora_catedra'         => $rel->hora_catedra,
+            'anio'                 => null,
+            'periodo'              => null,
+            'turno'                => $rel->turno,
+            'perfil'               => $rel->perfil,
+            'horario_espacio'      => $this->horario_espacio,
+            'situacion_revista_id' => $this->situacion_revista_id,
+            'situacion_revista'    => $sit_revista,
+        ];
+       } else {
 
             $rel = DB::table('nuevo_rel_carrera_espacio')
                 ->join('tb_espacioscurriculares', 'nuevo_rel_carrera_espacio.espacio_id', '=', 'tb_espacioscurriculares.idEspacioCurricular')
@@ -367,8 +324,8 @@ new class extends Component {
                 'carrera_id'           => $this->carrera_id,
                 'carrera_nombre'       => DB::table('tb_carreras')->where('id', $this->carrera_id)->value('nombre'),
                 'tipo'                 => 'Espacio',
-                'tipo_rel'             => $tipoRel,
-                'id_rel'               => $idRel,
+                'tipo_rel'             => null,
+                'id_rel'               => $this->nuevo_rel_carrera_espacio_id,
                 'nombre'               => $rel->nombre,
                 'hora_catedra'         => $rel->hora_catedra,
                 'anio'                 => $rel->anio,
@@ -416,14 +373,13 @@ new class extends Component {
 
         if ($this->es_cargo) {
             $this->cargarCargosPorInstituto((int)$this->instituto_id);
-          
-            $tipoRel = $det['tipo_rel'] ?? 'carrera';
-            $this->nuevo_rel_carrera_cargo_id   = $tipoRel . ':' . $det['id_rel'];
+
+            $this->nuevo_rel_carrera_cargo_id   = $det['id_rel'];
             $this->nuevo_rel_carrera_espacio_id = '';
             $this->carreras                     = [];
 
-           $this->cargo_es_por_carrera = ($tipoRel === 'carrera');
-            if ($this->cargo_es_por_carrera && !empty($det['carrera_id'])) {
+            $this->cargo_es_por_carrera = !empty($det['carrera_id']);
+            if ($this->cargo_es_por_carrera) {
                 $this->carreras = DB::table('tb_carreras')
                     ->join('rel_instsup_carrera', 'tb_carreras.id', '=', 'rel_instsup_carrera.carrera_id')
                     ->where('rel_instsup_carrera.instituto_id', $this->instituto_id)
@@ -434,6 +390,7 @@ new class extends Component {
             } else {
                 $this->carrera_id = '';
             }
+        
         } else {
             $this->cargo_es_por_carrera = false;
             $this->carreras = DB::table('tb_carreras')
@@ -502,14 +459,14 @@ new class extends Component {
                     ]);
                 } else {
                     DB::table('nuevo_cargo_por_llamado')->insert([
-                       'llamado_id'                   => $llamadoId,
-                    'instituto_id'                 => $detalle['instituto_id'],
-                    'nuevo_rel_carrera_cargo_id'   => $detalle['tipo_rel'] === 'carrera'   ? $detalle['id_rel'] : null,
-                    'nuevo_rel_instituto_cargo_id' => $detalle['tipo_rel'] === 'instituto' ? $detalle['id_rel'] : null,
-                    'horario_cargo'                => $detalle['horario_espacio'],
-                    'situacion_revista_id'         => $detalle['situacion_revista_id'],
-                    'created_at'                   => now(),
-                    ]);
+      'llamado_id'                   => $llamadoId,
+      'instituto_id'                 => $detalle['instituto_id'],
+      'nuevo_rel_instituto_cargo_id' => $detalle['id_rel'],
+      'carrera_id'                   => $detalle['carrera_id'],
+      'horario_cargo'                => $detalle['horario_espacio'],
+      'situacion_revista_id'         => $detalle['situacion_revista_id'],
+      'created_at'                   => now(),
+  ]);
                 }
             }
         });
@@ -625,35 +582,30 @@ new class extends Component {
             ];
         }
  
-            $cargos = DB::table('nuevo_cargo_por_llamado')
-             ->leftJoin('nuevo_rel_carrera_cargo',   'nuevo_cargo_por_llamado.nuevo_rel_carrera_cargo_id',   '=', 'nuevo_rel_carrera_cargo.id')
-            ->leftJoin('nuevo_rel_instituto_cargo', 'nuevo_cargo_por_llamado.nuevo_rel_instituto_cargo_id', '=', 'nuevo_rel_instituto_cargo.id')
-            ->leftJoin('tb_cargos', DB::raw('COALESCE(nuevo_rel_carrera_cargo.cargo_id, nuevo_rel_instituto_cargo.cargo_id)'), '=', 'tb_cargos.id')
-            ->leftJoin('tb_carreras', 'nuevo_rel_carrera_cargo.carrera_id', '=', 'tb_carreras.id')
-            ->leftJoin('tb_perfil', DB::raw('COALESCE(nuevo_rel_carrera_cargo.perfil_id, nuevo_rel_instituto_cargo.perfil_id)'), '=', 'tb_perfil.idtb_perfil')
-            ->leftJoin('tb_turnos', DB::raw('COALESCE(nuevo_rel_carrera_cargo.turno_id, nuevo_rel_instituto_cargo.turno_id)'), '=', 'tb_turnos.id')
-            ->join('tb_instituto_superior',    'nuevo_cargo_por_llamado.instituto_id', '=', 'tb_instituto_superior.id')
-            ->join('tb_situacion_revista',     'nuevo_cargo_por_llamado.situacion_revista_id', '=', 'tb_situacion_revista.idtb_situacion_revista')
-            ->where('nuevo_cargo_por_llamado.llamado_id', $id)
-            ->select(
-                'nuevo_cargo_por_llamado.instituto_id',
-                'tb_instituto_superior.nombre as instituto_nombre',
-                'nuevo_rel_carrera_cargo.carrera_id',
-                'tb_carreras.nombre as carrera_nombre',
-                'tb_cargos.nombre_cargo as nombre',
+           $cargos = DB::table('nuevo_cargo_por_llamado')
+        ->join('nuevo_rel_instituto_cargo', 'nuevo_cargo_por_llamado.nuevo_rel_instituto_cargo_id', '=', 'nuevo_rel_instituto_cargo.id')
+        ->join('tb_cargos', 'nuevo_rel_instituto_cargo.cargo_id', '=', 'tb_cargos.id')
+        ->leftJoin('tb_carreras', 'nuevo_cargo_por_llamado.carrera_id', '=', 'tb_carreras.id')
+        ->leftJoin('tb_perfil', 'nuevo_rel_instituto_cargo.perfil_id', '=', 'tb_perfil.idtb_perfil')
+        ->leftJoin('tb_turnos', 'nuevo_rel_instituto_cargo.turno_id', '=', 'tb_turnos.id')
+        ->join('tb_instituto_superior', 'nuevo_cargo_por_llamado.instituto_id', '=', 'tb_instituto_superior.id')
+        ->join('tb_situacion_revista', 'nuevo_cargo_por_llamado.situacion_revista_id', '=', 'tb_situacion_revista.idtb_situacion_revista')
+        ->where('nuevo_cargo_por_llamado.llamado_id', $id)
+        ->select(
+            'nuevo_cargo_por_llamado.instituto_id',
+            'tb_instituto_superior.nombre as instituto_nombre',
+            'nuevo_cargo_por_llamado.carrera_id',
+            'tb_carreras.nombre as carrera_nombre',
+            'tb_cargos.nombre_cargo as nombre',
+            'nuevo_cargo_por_llamado.nuevo_rel_instituto_cargo_id as id_rel',
+            'tb_cargos.hora_catedra',
+            'tb_perfil.nombre_perfil as perfil',
+            'tb_turnos.nombre_turno as turno',
+            'nuevo_cargo_por_llamado.horario_cargo as horario_espacio',
+            'nuevo_cargo_por_llamado.situacion_revista_id',
+            'tb_situacion_revista.nombre_situacion_revista as situacion_revista'
+        )->get();
 
-                 DB::raw('COALESCE(nuevo_cargo_por_llamado.nuevo_rel_carrera_cargo_id, nuevo_cargo_por_llamado.nuevo_rel_instituto_cargo_id) as id_rel'),
-                 DB::raw("CASE WHEN nuevo_cargo_por_llamado.nuevo_rel_carrera_cargo_id IS NOT NULL THEN 'carrera' ELSE 'instituto' END as tipo_rel"),
-
-                'tb_cargos.hora_catedra',
-                'tb_perfil.nombre_perfil as perfil',
-                'tb_turnos.nombre_turno as turno',
-                'nuevo_cargo_por_llamado.horario_cargo as horario_espacio',
-                'nuevo_cargo_por_llamado.situacion_revista_id',
-                'tb_situacion_revista.nombre_situacion_revista as situacion_revista'
-            )->get();
-         
- 
         foreach ($cargos as $c) {
             $this->detalles_agregados[] = [
                 'instituto_id'         => $c->instituto_id,
@@ -661,7 +613,6 @@ new class extends Component {
                 'carrera_id'           => $c->carrera_id,
                 'carrera_nombre'       => $c->carrera_nombre,
                 'tipo'                 => 'Cargo',
-                'tipo_rel'             => $c->tipo_rel,
                 'id_rel'               => $c->id_rel,
                 'nombre'               => $c->nombre,
                 'hora_catedra'         => $c->hora_catedra,
@@ -717,10 +668,10 @@ new class extends Component {
                     ]);
                 } else {
                     DB::table('nuevo_cargo_por_llamado')->insert([
-                          'llamado_id'                   => $this->editando,
+                    'llamado_id'                   => $this->editando,
                     'instituto_id'                 => $detalle['instituto_id'],
-                    'nuevo_rel_carrera_cargo_id'   => $detalle['tipo_rel'] === 'carrera'   ? $detalle['id_rel'] : null,
-                    'nuevo_rel_instituto_cargo_id' => $detalle['tipo_rel'] === 'instituto' ? $detalle['id_rel'] : null,
+                    'nuevo_rel_instituto_cargo_id' => $detalle['id_rel'],
+                    'carrera_id'                   => $detalle['carrera_id'],
                     'horario_cargo'                => $detalle['horario_espacio'],
                     'situacion_revista_id'         => $detalle['situacion_revista_id'],
                     'created_at'                   => now(),
@@ -802,42 +753,40 @@ new class extends Component {
             )
             ->get()->groupBy('llamado_id');
 
-        // Cargos: turno y perfil vienen de nuevo_rel_carrera_cargo
-        $cargosPorLlamado = DB::table('nuevo_cargo_por_llamado')
-            ->join('nuevo_rel_carrera_cargo',  'nuevo_cargo_por_llamado.nuevo_rel_carrera_cargo_id', '=', 'nuevo_rel_carrera_cargo.id')
-            ->join('tb_cargos',                'nuevo_rel_carrera_cargo.cargo_id',   '=', 'tb_cargos.id')
-            ->leftJoin('tb_carreras',          'nuevo_rel_carrera_cargo.carrera_id', '=', 'tb_carreras.id')
-            ->leftJoin('tb_perfil',            'nuevo_rel_carrera_cargo.perfil_id',  '=', 'tb_perfil.idtb_perfil')
-            ->leftJoin('tb_turnos',            'nuevo_rel_carrera_cargo.turno_id',   '=', 'tb_turnos.id')
-            ->join('tb_situacion_revista',     'nuevo_cargo_por_llamado.situacion_revista_id', '=', 'tb_situacion_revista.idtb_situacion_revista')
-            ->whereIn('nuevo_cargo_por_llamado.llamado_id', $ids)
-            ->select(
-                'nuevo_cargo_por_llamado.llamado_id',
-                'tb_cargos.nombre_cargo as detalle',
-                'tb_carreras.nombre as carrera',
-                'tb_cargos.hora_catedra',
-                DB::raw('NULL as anio'),
-                DB::raw('NULL as periodo'),
-                'tb_turnos.nombre_turno as turno',
-                'tb_perfil.nombre_perfil as perfil',
-                'nuevo_cargo_por_llamado.horario_cargo as horario_espacio',
-                'tb_situacion_revista.nombre_situacion_revista as situacion_revista',
-                DB::raw("'Cargo' as tipo")
-            )
-            ->get()->groupBy('llamado_id');
- 
-        $institutosPorLlamado = DB::table('nuevo_espacios_por_llamado')
-            ->join('tb_instituto_superior', 'nuevo_espacios_por_llamado.instituto_id', '=', 'tb_instituto_superior.id')
-            ->whereIn('nuevo_espacios_por_llamado.llamado_id', $ids)
-            ->select('nuevo_espacios_por_llamado.llamado_id', 'tb_instituto_superior.nombre')
-            ->union(
-                DB::table('nuevo_cargo_por_llamado')
-                    ->join('tb_instituto_superior', 'nuevo_cargo_por_llamado.instituto_id', '=', 'tb_instituto_superior.id')
-                    ->whereIn('nuevo_cargo_por_llamado.llamado_id', $ids)
-                    ->select('nuevo_cargo_por_llamado.llamado_id', 'tb_instituto_superior.nombre')
-            )
-            ->get()->groupBy('llamado_id');
- 
+        // Cargos: turno y perfil vienen de nuevo_rel_instituto_cargo; carrera (Bedel) es dato directo del detalle
+         $cargosPorLlamado = DB::table('nuevo_cargo_por_llamado')
+        ->join('nuevo_rel_instituto_cargo', 'nuevo_cargo_por_llamado.nuevo_rel_instituto_cargo_id', '=', 'nuevo_rel_instituto_cargo.id')
+        ->join('tb_cargos', 'nuevo_rel_instituto_cargo.cargo_id', '=', 'tb_cargos.id')
+        ->leftJoin('tb_carreras', 'nuevo_cargo_por_llamado.carrera_id', '=', 'tb_carreras.id')
+        ->leftJoin('tb_perfil', 'nuevo_rel_instituto_cargo.perfil_id', '=', 'tb_perfil.idtb_perfil')
+        ->leftJoin('tb_turnos', 'nuevo_rel_instituto_cargo.turno_id', '=', 'tb_turnos.id')
+        ->join('tb_situacion_revista',     'nuevo_cargo_por_llamado.situacion_revista_id', '=', 'tb_situacion_revista.idtb_situacion_revista')
+        ->whereIn('nuevo_cargo_por_llamado.llamado_id', $ids)
+        ->select(
+            'nuevo_cargo_por_llamado.llamado_id',
+            'tb_cargos.nombre_cargo as detalle',
+            'tb_carreras.nombre as carrera',
+            'tb_cargos.hora_catedra',
+            'tb_turnos.nombre_turno as turno',
+            'tb_perfil.nombre_perfil as perfil',
+            'nuevo_cargo_por_llamado.horario_cargo as horario_espacio',
+            'tb_situacion_revista.nombre_situacion_revista as situacion_revista',
+            DB::raw("'Cargo' as tipo")
+        )
+        ->get()->groupBy('llamado_id');
+    
+            $institutosPorLlamado = DB::table('nuevo_espacios_por_llamado')
+                ->join('tb_instituto_superior', 'nuevo_espacios_por_llamado.instituto_id', '=', 'tb_instituto_superior.id')
+                ->whereIn('nuevo_espacios_por_llamado.llamado_id', $ids)
+                ->select('nuevo_espacios_por_llamado.llamado_id', 'tb_instituto_superior.nombre')
+                ->union(
+                    DB::table('nuevo_cargo_por_llamado')
+                        ->join('tb_instituto_superior', 'nuevo_cargo_por_llamado.instituto_id', '=', 'tb_instituto_superior.id')
+                        ->whereIn('nuevo_cargo_por_llamado.llamado_id', $ids)
+                        ->select('nuevo_cargo_por_llamado.llamado_id', 'tb_instituto_superior.nombre')
+                )
+                ->get()->groupBy('llamado_id');
+    
         foreach ($rows as $item) {
             if (\Carbon\Carbon::parse($item->fecha_fin, $this->tz())->lte($ahora) && $item->idtb_tipoestado != $ESTADO_CERRADO) {
                 $item->idtb_tipoestado = $ESTADO_CERRADO;
@@ -1036,7 +985,7 @@ new class extends Component {
 
                             @foreach($cargos as $ca)
                                 @php $ca = is_array($ca) ? (object)$ca : $ca; @endphp
-                                <option value="{{ $ca->tipo_rel }}:{{ $ca->id }}">
+                               <option value="{{ $ca->id }}">
                                     {{ $ca->nombre_cargo }}
                                 </option>
                             @endforeach
@@ -1512,7 +1461,7 @@ new class extends Component {
 
                                             @foreach($cargos as $ca)
                                                 @php $ca = is_array($ca) ? (object)$ca : $ca; @endphp
-                                               <option value="{{ $ca->tipo_rel }}:{{ $ca->id }}">
+                                               <option value="{{ $ca->id }}">
                                                     {{ $ca->nombre_cargo }}
                                                 </option>
                                             @endforeach
