@@ -118,21 +118,21 @@ class extends Component
 }; ?>
 
 <div class="p-6 bg-white rounded-xl shadow-lg border border-gray-100 max-w-6xl mx-auto my-8">
+    <div class="flex justify-center mb-6">
+         <img src="{{ asset('img/cabecera.png') }}" alt="Listados de Orden de Mérito" class="w-full h-60 mb-1">
+   </div>
   @livewire('pages.publico.inscripcion-llamado')
     <div class="flex items-center mb-8 pb-4 border-b-4 border-indigo-500 w-fit">
-        <svg class="w-8 h-8 mr-3 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/>
-        </svg>
-        <h1 class="text-3xl font-black text-gray-800">Convocatorias Publicadas</h1>
-    </div>
-    @if (Route::has('login'))
         <div class="auth-row">
                         @auth
-                            <a href="{{ route('dashboard') }}" class="btn-volver bg-indigo-600 hover:bg-indigo-700 text-white">Volver</a>
+                            <a href="{{ route('dashboard') }}" class="btn-volver bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg ">Volver</a>
                         @else
-                        <a href="{{ route('home') }}" class="btn btn-volver bg-indigo-600 hover:bg-indigo-700 text-white">Volver</a>
+                        <a href="{{ route('home') }}" class="btn btn-volver bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg">Volver</a>
                         @endauth
                     </div>
+    </div>
+    @if (Route::has('login'))
+       
      @endif                
     <div class="overflow-x-auto rounded-2xl border border-gray-300 shadow-2xl">
 

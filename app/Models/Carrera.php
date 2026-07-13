@@ -8,7 +8,7 @@ class Carrera extends Model
 {
      protected $table = 'tb_carreras';
    public $timestamps = false;
-   protected $fillable = ['nombre_carrera', 'titulo'];    
+   protected $fillable = ['nombre', 'titulo'];    
 
     public function institutos()
     {

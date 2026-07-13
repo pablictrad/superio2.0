@@ -4,6 +4,7 @@ use App\Models\RelInstitutoSupCarrera;
 use App\Models\Instituto;
 use App\Models\Carrera;
 use Livewire\Attributes\Title;
+use Livewire\Attributes\Computed;
 use Livewire\WithPagination;
 
 new #[Title('Relación Instituto - Carrera')] class extends Component
@@ -20,10 +21,16 @@ new #[Title('Relación Instituto - Carrera')] class extends Component
     public $newInstitutoId = '';
     public $newCarreraId = '';
 
+      // Búsqueda dentro de los combos del modal Nuevo Registro
+    public $buscarInstitutoNuevo = '';
+    public $buscarCarreraNuevo = '';
+
     // Propiedades para edición
     public $editId = null;
     public $editInstitutoId = '';
     public $editCarreraId = '';
+    public $editInstitutoNombre = '';
+    public $editCarreraNombre = '';
 
     public function mount()
     {
@@ -33,6 +40,26 @@ new #[Title('Relación Instituto - Carrera')] class extends Component
 
     public function updatedBuscarInstituto() { $this->resetPage(); }
     public function updatedBuscarCarrera() { $this->resetPage(); }
+
+       #[Computed(cache: false)]
+    public function institutosNuevoFiltrados()
+    {
+        if (!$this->buscarInstitutoNuevo) return $this->institutos;
+ 
+        return array_values(array_filter($this->institutos, fn($i) =>
+            str_contains(strtolower($i['nombre']), strtolower($this->buscarInstitutoNuevo))
+        ));
+    }
+ 
+    #[Computed(cache: false)]
+    public function carrerasNuevoFiltradas()
+    {
+        if (!$this->buscarCarreraNuevo) return $this->carreras;
+ 
+        return array_values(array_filter($this->carreras, fn($c) =>
+            str_contains(strtolower($c['nombre']), strtolower($this->buscarCarreraNuevo))
+        ));
+    }
 
     public function getRowsProperty()
     {
@@ -58,21 +85,23 @@ new #[Title('Relación Instituto - Carrera')] class extends Component
         $this->editId = $rel->id;
         $this->editInstitutoId = $rel->instituto_id;
         $this->editCarreraId = $rel->carrera_id;
-
+        $this->editInstitutoNombre = $rel->instituto->nombre ?? '';
+        $this->editCarreraNombre = $rel->carrera->nombre ?? '';
         $this->dispatch('modal-show', name: 'edit-modal');
     }
+  
 
+    
     public function guardarEdicion()
     {
         $this->validate([
-            'editInstitutoId' => 'required',
-            'editCarreraId' => 'required',
+            'editInstitutoNombre' => 'required|string|max:255',
+            'editCarreraNombre'   => 'required|string|max:255',
         ]);
 
-        RelInstitutoSupCarrera::find($this->editId)->update([
-            'instituto_id' => $this->editInstitutoId,
-            'carrera_id' => $this->editCarreraId,
-        ]);
+        Instituto::find($this->editInstitutoId)->update(['nombre' => $this->editInstitutoNombre]);
+        Carrera::find($this->editCarreraId)->update(['nombre' => $this->editCarreraNombre]);
+
 
         $this->dispatch('modal-close', name: 'edit-modal');
         $this->dispatch('toast', variant: 'success', heading: 'Éxito', text: 'Relación actualizada correctamente.');
@@ -115,6 +144,8 @@ new #[Title('Relación Instituto - Carrera')] class extends Component
     {
         $this->newInstitutoId = '';
         $this->newCarreraId = '';
+        $this->buscarInstitutoNuevo = '';
+        $this->buscarCarreraNuevo = '';
     }
 };
 ?>
@@ -197,26 +228,28 @@ new #[Title('Relación Instituto - Carrera')] class extends Component
             <div class="space-y-6">
                 <flux:field>
                     <flux:label>Instituto Superior</flux:label>
-                    <flux:select wire:model="newInstitutoId" searchable size="sm" placeholder="Seleccione instituto...">
+                    <flux:input wire:model.live.debounce.300ms="buscarInstitutoNuevo" icon="magnifying-glass" placeholder="Buscar instituto..." size="sm" class="mb-2" />
+                    <flux:select wire:model="newInstitutoId" size="sm" placeholder="Seleccione instituto...">
                         <option value="">Seleccione...</option>
-                        @foreach($institutos as $i)
+                        @foreach($this->institutosNuevoFiltrados as $i)
                             <option value="{{ $i['id'] }}">{{ $i['nombre'] }}</option>
                         @endforeach
                     </flux:select>
                 </flux:field>
 
-                <flux:field>
+                  <flux:field>
                     <flux:label>Carrera Profesional</flux:label>
-                    <flux:select wire:model="newCarreraId" searchable size="sm" placeholder="Seleccione carrera...">
+                    <flux:input wire:model.live.debounce.300ms="buscarCarreraNuevo" icon="magnifying-glass" placeholder="Buscar carrera..." size="sm" class="mb-2" />
+                    <flux:select wire:model="newCarreraId" size="sm" placeholder="Seleccione carrera...">
                         <option value="">Seleccione...</option>
-                        @foreach($carreras as $c)
+                        @foreach($this->carrerasNuevoFiltradas as $c)
                             <option value="{{ $c['id'] }}">{{ $c['nombre'] }}</option>
                         @endforeach
                     </flux:select>
                 </flux:field>
             </div>
-
-            <div class="flex justify-end gap-2 pt-6 border-t border-zinc-100 dark:border-zinc-800">
+            
+                <div class="flex justify-end gap-2 pt-6 border-t border-zinc-100 dark:border-zinc-800">
                 <flux:modal.close>
                     <flux:button variant="ghost" size="sm">Cancelar</flux:button>
                 </flux:modal.close>
@@ -235,21 +268,13 @@ new #[Title('Relación Instituto - Carrera')] class extends Component
 
             <div class="space-y-6">
                 <flux:field>
-                    <flux:label>Instituto Superior</flux:label>
-                    <flux:select wire:model="editInstitutoId" searchable size="sm">
-                        @foreach($institutos as $i)
-                            <option value="{{ $i['id'] }}">{{ $i['nombre'] }}</option>
-                        @endforeach
-                    </flux:select>
+                     <flux:label>Nombre del Instituto</flux:label>
+                     <flux:input wire:model="editInstitutoNombre" size="sm" />
                 </flux:field>
 
                 <flux:field>
-                    <flux:label>Carrera Profesional</flux:label>
-                    <flux:select wire:model="editCarreraId" searchable size="sm">
-                        @foreach($carreras as $c)
-                            <option value="{{ $c['id'] }}">{{ $c['nombre'] }}</option>
-                        @endforeach
-                    </flux:select>
+                     <flux:label>Nombre de la Carrera</flux:label>
+                     <flux:input wire:model="editCarreraNombre" size="sm" />
                 </flux:field>
             </div>
 

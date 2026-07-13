@@ -4,10 +4,34 @@
     use Illuminate\Support\Facades\Storage;
     use Livewire\Attributes\Computed;
     use Livewire\Volt\Component;
-
+    use Livewire\WithPagination;
     new #[Layout('layouts.publico')]
     class extends Component
     {
+        use WithPagination;
+        public $filtroZona      = '';
+        public $filtroInstituto = '';
+
+        public function updatedFiltroZona()      { $this->resetPage(); }
+        public function updatedFiltroInstituto() { $this->resetPage(); }
+
+        #[Computed(cache: false)]
+        public function zonas()
+        {
+            return DB::table('tb_zona')->where('id', '!=', 8)->orderBy('nombre_zona')->get();
+        }
+
+        #[Computed(cache: false)]
+        public function institutosFiltro()
+        {
+         $query = DB::table('tb_instituto_superior')->orderBy('nombre');
+
+        if ($this->filtroZona) {
+             $query->where('zona_id', $this->filtroZona);
+        }
+
+         return $query->get();
+        }
         #[Computed(cache: false)]
         public function loms()
         {
@@ -19,6 +43,8 @@
                 ->leftJoin('tb_cargos', 'tb_lom.idtb_cargo', '=', 'tb_cargos.id')
                 ->leftJoin('tb_espacioscurriculares', 'tb_lom.idEspacioCurricular', '=', 'tb_espacioscurriculares.idEspacioCurricular')
                 ->where('tb_lom.idtb_tipoestado', 8)
+                ->when($this->filtroZona,      fn($q) => $q->where('tb_lom.idtb_zona', $this->filtroZona))
+                ->when($this->filtroInstituto, fn($q) => $q->where('tb_lom.id_instituto_superior', $this->filtroInstituto))
                 ->select(
                     'tb_lom.*',
                     'tb_zona.nombre_zona',
@@ -29,30 +55,55 @@
                     'tb_espacioscurriculares.nombre_espacio'
                 )
                 ->orderBy('tb_lom.idtb_lom', 'desc')
-                ->get();
+                ->paginate(5);
         }
     };
     
 ?>
 
 <div class="p-6 bg-white rounded-xl shadow-lg border border-gray-100 max-w-6xl mx-auto my-8">
-    
+    <div class="flex justify-center mb-6">
+         <img src="{{ asset('img/lom.png') }}" alt="Listados de Orden de Mérito" class="w-full h-60">
+   </div>
     <div class="flex items-center mb-8 pb-4 border-b-4 border-indigo-500 w-fit">
-        <svg class="w-8 h-8 mr-3 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/>
-        </svg>
-        <h1 class="text-3xl font-black text-gray-800">Listados de Orden de Mérito</h1>
+       
+        @if (Route::has('login'))
+            <div class="auth-row">
+                 @auth
+                 <a href="{{ route('dashboard') }}" class="btn-volver bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg">Volver</a>
+        @else
+                    <a href="{{ route('home') }}" class="btn-volver bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg">Volver</a>
+                @endauth
+            </div>
+        @endif   
     </div>
-      @if (Route::has('login'))
-        <div class="auth-row">
-                        @auth
-                            <a href="{{ route('dashboard') }}" class="btn-volver bg-indigo-600 hover:bg-indigo-700 text-white">Volver</a>
-                        @else
-                        <a href="{{ route('home') }}" class="btn-volver bg-indigo-600 hover:bg-indigo-700 text-white">Volver</a>
-                        @endauth
-                    </div>
-     @endif      
-    <div class="overflow-x-auto rounded-2xl border border-gray-300 shadow-2xl">
+   
+
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+        <div>
+            <label class="block text-[10px] font-black text-gray-600 uppercase tracking-widest mb-1">Buscar Por Zona</label>
+            <select wire:model.live="filtroZona"
+                class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm">
+                <option value="">Todas las zonas</option>
+                @foreach($this->zonas as $z)
+                    <option value="{{ $z->id }}">{{ $z->nombre_zona }}</option>
+                @endforeach
+            </select>
+        </div>
+        <div>
+            <label class="block text-[10px] font-black text-gray-600 uppercase tracking-widest mb-1">Buscar Por Instituto</label>
+            <select wire:model.live="filtroInstituto"
+                class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm">
+                <option value="">Todos los institutos</option>
+                @foreach($this->institutosFiltro as $i)
+                    <option value="{{ $i->id }}">{{ $i->nombre }}</option>
+                @endforeach
+            </select>
+        </div>
+    </div>
+
+    <div class="overflow-x-auto rounded-2xl border border-gray-300 shadow-2xl">   
+   
         <table class="min-w-full border border-gray-300 table-fixed bg-white text-center">
             <thead class="bg-gray-900 text-white">
                 <tr>
@@ -63,7 +114,7 @@
                     <th class="w-[18%] px-2 py-4 text-xs font-black uppercase border-r border-gray-700">Espacio / Cargo</th>
                    
                    
-                    <th class="w-[13%] px-2 py-4 text-xs font-black uppercase">PDF</th>
+                    <th class="w-[13%] px-2 py-4 text-xs font-black uppercase">Ver LOM</th>
                 </tr>
             </thead>
             <tbody class="divide-y divide-gray-200">
@@ -79,7 +130,7 @@
                        
                         
                         <td class="px-2 py-4 text-center">
-                            @if($lom->pdf)
+                             @if($lom->idtb_tipoestado == 8)
                                 <a href="{{ route('lom.vista', $lom->idtb_lom) }}"
                                     class="inline-flex items-center bg-blue-600 hover:bg-blue-700 text-white px-3 py-2 rounded-lg text-xs font-black uppercase transition shadow-md">
                                         <svg class="w-4 h-4 mr-1" fill="currentColor" viewBox="0 0 20 20">
@@ -88,7 +139,7 @@
                                         Ver LOM
                                 </a>
                             @else
-                                <span class="text-gray-400 text-xs italic">Sin PDF</span>
+                                <span class="text-gray-400 text-xs italic">No publicado</span>
                             @endif
                         </td>
                     </tr>
@@ -101,5 +152,8 @@
                 @endforelse
             </tbody>
         </table>
+    </div>
+    <div class="mt-4">
+         {{ $this->loms->links() }}
     </div>
 </div>

@@ -58,7 +58,9 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::get('/admin/llamados/{llamadoId}/pdf', [LlamadoPdfController::class, 'generar'])
      ->name('admin.llamados.pdf');
   
-
+   Volt::route('/admin/lom', 'pages.admin.lom.lomcrear')
+    ->name('admin.lom.crear');
+     Volt::route('admin/catalogos', 'pages.admin.catalogos.abm-catalogos')->name('admin.catalogos');
 });
  
 // PUBLICAS
@@ -67,8 +69,7 @@ Volt::route('/publico', 'pages.admin.llamados.publico')
     ->name('admin.llamados.publico');
 
     // LOM
-Volt::route('/admin/lom', 'pages.admin.lom.lomcrear')
-    ->name('admin.lom.crear');
+
 
 Volt::route('/lom', 'pages.admin.lom.lompublico')
     ->name('admin.lom.publico');

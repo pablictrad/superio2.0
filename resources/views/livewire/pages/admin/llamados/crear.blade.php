@@ -119,7 +119,7 @@ new class extends Component {
         }
     }
 
-   private function cargarCargosPorInstituto(int $institutoId): void
+    private function cargarCargosPorInstituto(int $institutoId): void
     {
         $this->cargos = DB::table('nuevo_rel_instituto_cargo')
             ->join('tb_cargos', 'nuevo_rel_instituto_cargo.cargo_id', '=', 'tb_cargos.id')
@@ -160,36 +160,36 @@ new class extends Component {
     }
 
     public function updatedCarreraId($value)
-{
-    // En modo cargo no aplica (los cargos se cargan por instituto)
-    if ($this->es_cargo) return;
+    {
+        // En modo cargo no aplica (los cargos se cargan por instituto)
+        if ($this->es_cargo) return;
 
-    \Log::info('updatedCarreraId', [
-        'carrera_id'   => $value,
-        'instituto_id' => $this->instituto_id,
-        'es_cargo'     => $this->es_cargo,
-    ]);
-
-    if ($value && $this->instituto_id) {
-        $rows = DB::table('nuevo_rel_carrera_espacio')
-            ->join('tb_espacioscurriculares', 'nuevo_rel_carrera_espacio.espacio_id', '=', 'tb_espacioscurriculares.idEspacioCurricular')
-            ->where('nuevo_rel_carrera_espacio.carrera_id', $value)
-            ->where('nuevo_rel_carrera_espacio.instituto_id', $this->instituto_id)
-            ->select('nuevo_rel_carrera_espacio.id', 'tb_espacioscurriculares.nombre_espacio')
-            ->get();
-
-        \Log::info('espacios encontrados', [
-            'count'      => $rows->count(),
-            'instituto_id' => $this->instituto_id,
+        \Log::info('updatedCarreraId', [
             'carrera_id'   => $value,
+            'instituto_id' => $this->instituto_id,
+            'es_cargo'     => $this->es_cargo,
         ]);
 
-        $this->espacios = $rows->toArray();
-    } else {
-        $this->espacios = [];
+        if ($value && $this->instituto_id) {
+            $rows = DB::table('nuevo_rel_carrera_espacio')
+                ->join('tb_espacioscurriculares', 'nuevo_rel_carrera_espacio.espacio_id', '=', 'tb_espacioscurriculares.idEspacioCurricular')
+                ->where('nuevo_rel_carrera_espacio.carrera_id', $value)
+                ->where('nuevo_rel_carrera_espacio.instituto_id', $this->instituto_id)
+                ->select('nuevo_rel_carrera_espacio.id', 'tb_espacioscurriculares.nombre_espacio')
+                ->get();
+
+            \Log::info('espacios encontrados', [
+                'count'      => $rows->count(),
+                'instituto_id' => $this->instituto_id,
+                'carrera_id'   => $value,
+            ]);
+
+            $this->espacios = $rows->toArray();
+        } else {
+            $this->espacios = [];
+        }
+        $this->nuevo_rel_carrera_espacio_id = '';
     }
-    $this->nuevo_rel_carrera_espacio_id = '';
-}
 
     public function updatedIdtipoLlamado($value)
     {
@@ -228,12 +228,93 @@ new class extends Component {
     {
         $ahora = \Carbon\Carbon::now($this->tz())->format('Y-m-d H:i:00');
 
-        DB::table('nuevo_llamado')
+        $llamadosACerrar = DB::table('nuevo_llamado')
             ->where('idtb_tipoestado', 8)
             ->where('fecha_fin', '<=', $ahora)
-            ->update(['idtb_tipoestado' => 9]);
+            ->pluck('id');
+
+        if ($llamadosACerrar->isNotEmpty()) {
+            DB::table('nuevo_llamado')
+                ->whereIn('id', $llamadosACerrar)
+                ->update(['idtb_tipoestado' => 9]);
+
+            foreach ($llamadosACerrar as $llamadoId) {
+                $this->generarLomParaLlamado($llamadoId);
+            }
+        }
 
         $this->ultimo_cierre = $ahora;
+    }
+
+    private function generarLomParaLlamado(int $llamadoId): void
+    {
+        $llamado = DB::table('nuevo_llamado')->where('id', $llamadoId)->first();
+        if (!$llamado) return;
+
+        // Un LOM por cada ESPACIO CURRICULAR del llamado
+        $espacios = DB::table('nuevo_espacios_por_llamado')
+            ->join('nuevo_rel_carrera_espacio', 'nuevo_espacios_por_llamado.nuevo_rel_carrera_espacio_id', '=', 'nuevo_rel_carrera_espacio.id')
+            ->where('nuevo_espacios_por_llamado.llamado_id', $llamadoId)
+            ->select(
+                'nuevo_espacios_por_llamado.instituto_id',
+                'nuevo_rel_carrera_espacio.carrera_id',
+                'nuevo_rel_carrera_espacio.espacio_id'
+            )
+            ->get();
+
+        foreach ($espacios as $e) {
+            $this->crearFilaLom($llamado, [
+                'id_instituto_superior' => $e->instituto_id,
+                'idCarrera'             => $e->carrera_id,
+                'idEspacioCurricular'   => $e->espacio_id,
+                'idtb_cargo'            => null,
+            ]);
+        }
+
+        // Un LOM por cada CARGO del llamado
+        $cargos = DB::table('nuevo_cargo_por_llamado')
+            ->join('nuevo_rel_instituto_cargo', 'nuevo_cargo_por_llamado.nuevo_rel_instituto_cargo_id', '=', 'nuevo_rel_instituto_cargo.id')
+            ->where('nuevo_cargo_por_llamado.llamado_id', $llamadoId)
+            ->select(
+                'nuevo_cargo_por_llamado.instituto_id',
+                'nuevo_cargo_por_llamado.carrera_id',
+                'nuevo_rel_instituto_cargo.cargo_id'
+            )
+            ->get();
+
+        foreach ($cargos as $c) {
+            $this->crearFilaLom($llamado, [
+                'id_instituto_superior' => $c->instituto_id,
+                'idCarrera'             => $c->carrera_id,
+                'idtb_cargo'            => $c->cargo_id,
+                'idEspacioCurricular'   => null,
+            ]);
+        }
+    }
+
+    private function crearFilaLom($llamado, array $detalle): void
+    {
+        // Evitar duplicar si cerrarVencidos corre de nuevo (wire:poll cada 30s)
+        $yaExiste = DB::table('tb_lom')
+            ->where('llamado_id', $llamado->id)
+            ->where('idtb_cargo', $detalle['idtb_cargo'])
+            ->where('idEspacioCurricular', $detalle['idEspacioCurricular'])
+            ->exists();
+
+        if ($yaExiste) return;
+
+        DB::table('tb_lom')->insert([
+            'llamado_id'            => $llamado->id,
+            'idtb_zona'             => $llamado->idtb_zona,
+            'idtipo_llamado'        => $llamado->idtipo_llamado,
+            'id_instituto_superior' => $detalle['id_instituto_superior'],
+            'idCarrera'             => $detalle['idCarrera'],
+            'idtb_cargo'            => $detalle['idtb_cargo'],
+            'idEspacioCurricular'   => $detalle['idEspacioCurricular'],
+            'idtb_tipoestado'       => 9, // generado, todavía no publicado
+            'created_at'            => now(),
+            'updated_at'            => now(),
+        ]);
     }
 
     public function agregarDetalle()
@@ -399,6 +480,7 @@ new class extends Component {
                 ->select('tb_carreras.*')
                 ->orderBy('tb_carreras.nombre')
                 ->get()->toArray();
+                
             $this->carrera_id = $det['carrera_id'];
             $this->espacios = DB::table('nuevo_rel_carrera_espacio')
                 ->join('tb_espacioscurriculares', 'nuevo_rel_carrera_espacio.espacio_id', '=', 'tb_espacioscurriculares.idEspacioCurricular')
@@ -810,7 +892,9 @@ new class extends Component {
 
 <div class="p-6 bg-white rounded-xl shadow-lg border border-gray-100 max-w-6xl mx-auto my-8">
   
-   
+   <div class="flex justify-center mb-6">
+         <img src="{{ asset('img/cabecera.png') }}" alt="Listados de Orden de Mérito" class="w-full h-60 mb-1">
+   </div>
     {{-- HEADER --}}
     <div class="flex justify-between items-center mb-6 border-b pb-4">
         <h1 class="text-3xl font-bold text-gray-800">Crear Nueva Convocatoria</h1>
@@ -891,11 +975,11 @@ new class extends Component {
                     @error('fecha_fin') <span class="text-red-500 text-xs italic">{{ $message }}</span> @enderror
                 </div>
 
-                <div class="lg:col-span-2">
+                <!-- <div class="lg:col-span-2">
                     <label class="block text-sm font-bold text-gray-700 mb-1">Link de Inscripción</label>
                     <input type="url" wire:model.blur="url_form" placeholder="https://forms.gle/..."
                            class="w-auto min-w-22.5 border-gray-300 rounded-lg shadow-sm focus:border-indigo-500 focus:ring-indigo-500 text-sm">
-                </div>
+                </div> -->
             </div>
         </div>
 

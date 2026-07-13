@@ -19,18 +19,18 @@
                    
                 </flux:sidebar.group>
                
-                 <!-- <flux:sidebar.item icon="plus" :href="route('perfil')" :current="request()->routeIs('perfil')" wire:navigate>
-                        {{ __('Perfil') }}
-                </flux:sidebar.item> -->
+                <flux:sidebar.item icon="plus" :href="route('admin.catalogos')" :current="request()->routeIs('admin.catalogos')" wire:navigate>
+                        {{ __('ABM') }}
+                </flux:sidebar.item>
                 <flux:sidebar.item icon="plus" :href="route('admin.rel-instituto-carrera')" :current="request()->routeIs('admin.rel-instituto-carrera')" wire:navigate>
                         {{ __('Instituto-Carrera') }}
                 </flux:sidebar.item>
                 <flux:sidebar.item icon="plus" :href="route('admin.rel-instituto-cargo')" :current="request()->routeIs('admin.rel-instituto-cargo')" wire:navigate>
                         {{ __('Instituto-Cargo') }}
                 </flux:sidebar.item>
-                 <flux:sidebar.item icon="plus" :href="route('admin.rel-carrera-cargo')" :current="request()->routeIs('admin.rel-carrera-cargo')" wire:navigate>
+                 <!-- <flux:sidebar.item icon="plus" :href="route('admin.rel-carrera-cargo')" :current="request()->routeIs('admin.rel-carrera-cargo')" wire:navigate>
                         {{ __('Cargos-Carrera') }}
-                </flux:sidebar.item>
+                </flux:sidebar.item> -->
                 
                 <flux:sidebar.item icon="plus" :href="route('admin.rel-carrera-espacio')" :current="request()->routeIs('admin.rel-carrera-espacio')" wire:navigate>
                         {{ __('Espacios-Carrera') }}
@@ -43,9 +43,9 @@
                 <flux:sidebar.item icon="plus" :href="route('admin.llamados.publico')" :current="request()->routeIs('admin.llamados.publico')" wire:navigate>
                         {{ __('Ver convocatorias-Publicadas') }}
                 </flux:sidebar.item>    
-                <flux:sidebar.item icon="plus" :href="route('admin.lom.crear')" :current="request()->routeIs('admin.lom.crear')" wire:navigate>
+                <!-- <flux:sidebar.item icon="plus" :href="route('admin.lom.crear')" :current="request()->routeIs('admin.lom.crear')" wire:navigate>
                         {{ __('Crear LOM') }}
-                </flux:sidebar.item>   
+                </flux:sidebar.item>    -->
                 <flux:sidebar.item icon="plus" :href="route('admin.lom.publico')" :current="request()->routeIs('admin.lom.publico')" wire:navigate>
                         {{ __('Ver LOM-Publicado') }}
                 </flux:sidebar.item>   

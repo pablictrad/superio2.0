@@ -129,7 +129,16 @@ new class extends Component {
             'dniBusqueda.required'        => 'Ingrese su DNI para continuar.',
             'dniBusqueda.digits_between'  => 'El DNI debe tener entre 6 y 9 dígitos.',
         ]);
+          // Verificar inscripción duplicada ANTES de avanzar de pantalla
+            $yaInscripto = DB::table('inscripciones_llamado')
+                ->where('llamado_id', $this->llamadoId)
+                ->where('dni', $dni)
+                ->exists();
 
+            if ($yaInscripto) {
+                $this->mensajeErr = 'Ya existe una inscripción con ese DNI para este llamado.';
+                return;
+            }
         $docente = DB::table('tb_docentes')->where('dni', $dni)->first();
 
         if ($docente) {

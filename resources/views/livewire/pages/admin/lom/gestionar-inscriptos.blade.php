@@ -39,6 +39,16 @@ new class extends Component {
     // Mensaje de estado
     public string $mensaje       = '';
     public string $mensajeTipo   = ''; // 'ok' | 'err'
+    // Estado del LOM asociado a este llamado
+    public bool $lomExiste     = false;
+    public bool $lomPublicado  = false;
+
+    // Modal de documentación del inscripto
+    public bool  $docModalAbierto = false;
+    public ?int  $docInscriptoId  = null;
+    public $docInscripto          = null;
+    public array $docTitulos      = [];
+    public array $docCertificados = [];
 
     /* ── ABRIR PANEL ──────────────────────────────────────────────── */
   
@@ -52,6 +62,7 @@ new class extends Component {
         $this->editandoId = null;
         $this->cargarInscriptos();
         $this->cargarInfoLlamado();
+        $this->cargarInfoLom();
     }
 
     private function cargarInfoLlamado(): void
@@ -68,7 +79,13 @@ new class extends Component {
             )
             ->first();
     }
+    private function cargarInfoLom(): void
+    {
+        $lom = DB::table('tb_lom')->where('llamado_id', $this->llamadoId)->first();
 
+        $this->lomExiste    = (bool) $lom;
+        $this->lomPublicado = $lom ? ((int) $lom->idtb_tipoestado === 8) : false;
+    }
 
     private function cargarInscriptos(): void
     {
@@ -138,11 +155,69 @@ new class extends Component {
         $this->cargarInscriptos();
     }
 
+    /* ── VER DOCUMENTACIÓN DEL INSCRIPTO ──────────────────────────── */
+    public function verDocumentacion(int $id): void
+    {
+        $ins = collect($this->inscriptos)->firstWhere('id', $id);
+        if (!$ins) return;
+
+        $this->docInscripto    = (object) $ins;
+        $this->docInscriptoId  = $id;
+        $this->docTitulos      = [];
+        $this->docCertificados = [];
+
+        if (!empty($this->docInscripto->docente_id)) {
+            $this->docTitulos = DB::table('tb_docente_titulos')
+                ->where('docente_id', $this->docInscripto->docente_id)
+                ->orderBy('nombre_titulo')
+                ->get()
+                ->toArray();
+
+            $this->docCertificados = DB::table('tb_docente_certificados')
+                ->where('docente_id', $this->docInscripto->docente_id)
+                ->orderBy('nombre_certificado')
+                ->get()
+                ->toArray();
+        }
+
+        $this->docModalAbierto = true;
+    }
+
+    public function cerrarDocModal(): void
+    {
+        $this->docModalAbierto = false;
+        $this->docInscriptoId  = null;
+        $this->docInscripto    = null;
+        $this->docTitulos      = [];
+        $this->docCertificados = [];
+    }
+
     /* ── CERRAR PANEL ─────────────────────────────────────────────── */
     public function cerrarPanel(): void
     {
         $this->modalAbierto = false;
         $this->editandoId   = null;
+    }
+    public function publicarLom(): void
+    {
+        $lom = DB::table('tb_lom')->where('llamado_id', $this->llamadoId)->first();
+
+        if (!$lom) {
+            $this->setMensaje('err', 'Todavía no se generó el LOM para este llamado. Creá el LOM primero.');
+            return;
+        }
+
+        if ($this->stats['habilitados'] + $this->stats['sin_clasificar'] === 0) {
+            $this->setMensaje('err', 'No hay inscriptos Habilitados ni Sin Clasificar para publicar.');
+            return;
+        }
+
+        DB::table('tb_lom')
+            ->where('idtb_lom', $lom->idtb_lom)
+            ->update(['idtb_tipoestado' => 8]);
+
+        $this->lomPublicado = true;
+        $this->setMensaje('ok', 'LOM publicado correctamente. Ya está disponible en el listado público.');
     }
 
     /* ── HELPER MENSAJE ───────────────────────────────────────────── */
@@ -191,6 +266,7 @@ new class extends Component {
                         @if($llamadoInfo->nombre_zona)  · {{ $llamadoInfo->nombre_zona }}  @endif
                     </p>
                     @endif
+                    Gestión de Inscriptos
                 </div>
                 <div class="flex items-center gap-3">
                    
@@ -257,6 +333,7 @@ new class extends Component {
                             <th class="px-3 py-2.5 text-left text-[10px] font-black uppercase text-gray-500 tracking-wider w-24">DNI</th>
                             <th class="px-3 py-2.5 text-left text-[10px] font-black uppercase text-gray-500 tracking-wider w-28">Teléfono</th>
                             <th class="px-3 py-2.5 text-left text-[10px] font-black uppercase text-gray-500 tracking-wider">Email</th>
+                              <th class="px-3 py-2.5 text-left text-[10px] font-black uppercase text-gray-500 tracking-wider">Domicilio</th>
                             <th class="px-3 py-2.5 text-center text-[10px] font-black uppercase text-gray-500 tracking-wider w-24">Puntaje</th>
                             <th class="px-3 py-2.5 text-center text-[10px] font-black uppercase text-gray-500 tracking-wider w-28">Estado</th>
                             <th class="px-3 py-2.5 text-center text-[10px] font-black uppercase text-gray-500 tracking-wider w-20">Acc.</th>
@@ -282,6 +359,7 @@ new class extends Component {
                             <td class="px-3 py-2 text-xs text-gray-600">{{ $ins->dni }}</td>
                             <td class="px-3 py-2 text-xs text-gray-500">{{ $ins->telefono ?? '—' }}</td>
                             <td class="px-3 py-2 text-xs text-gray-500">{{ $ins->email ?? '—' }}</td>
+                            <td class="px-3 py-2 text-xs text-gray-500">{{ $ins->domicilio ?? '—' }}</td>
                             <td class="px-3 py-2 text-center">
                                 <input wire:model="editPuntaje" type="number" step="0.01" min="0" max="100"
                                     placeholder="0.00"
@@ -317,6 +395,17 @@ new class extends Component {
                             </td>
                             <td class="px-3 py-2">
                                 <div class="font-bold text-gray-800 text-xs">{{ $ins->apellido }} {{ $ins->nombre }}</div>
+                                <div class="flex gap-1 mt-1">
+                                    @if(!empty($ins->docente_id))
+                                        <span class="text-[9px] px-1.5 py-0.5 rounded bg-indigo-50 text-indigo-600 font-bold uppercase">Vinculado</span>
+                                    @endif
+                                    @if(!empty($ins->tiene_legajo))
+                                        <span class="text-[9px] px-1.5 py-0.5 rounded bg-blue-50 text-blue-600 font-bold uppercase">Legajo</span>
+                                    @endif
+                                    @if(!empty($ins->presento_f2))
+                                        <span class="text-[9px] px-1.5 py-0.5 rounded bg-purple-50 text-purple-600 font-bold uppercase">F2</span>
+                                    @endif
+                                </div>
                                 @if($ins->observaciones)
                                     <div class="text-[10px] text-gray-400 italic mt-0.5">{{ $ins->observaciones }}</div>
                                 @endif
@@ -324,6 +413,7 @@ new class extends Component {
                             <td class="px-3 py-2 text-xs text-gray-600 font-mono">{{ $ins->dni }}</td>
                             <td class="px-3 py-2 text-xs text-gray-500">{{ $ins->telefono ?? '—' }}</td>
                             <td class="px-3 py-2 text-xs text-gray-500">{{ $ins->email ?? '—' }}</td>
+                            <td class="px-3 py-2 text-xs text-gray-500">{{ $ins->domicilio ?? '—' }}</td>
                             <td class="px-3 py-2 text-center">
                                 @if($ins->puntaje !== null)
                                     <span class="font-black text-sm
@@ -360,6 +450,13 @@ new class extends Component {
                                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/>
                                         </svg>
                                     </button>
+                                    <button wire:click="verDocumentacion({{ $ins->id }})"
+                                        class="text-slate-500 hover:text-slate-800 p-1 rounded hover:bg-slate-100 transition"
+                                        title="Ver documentación">
+                                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+                                        </svg>
+                                    </button>
                                     <button
                                         onclick="confirm('¿Eliminar este inscripto?') || event.stopImmediatePropagation()"
                                         wire:click="eliminarInscripto({{ $ins->id }})"
@@ -387,6 +484,21 @@ new class extends Component {
                     Los <em>Pendientes</em> no aparecen en la publicación oficial.
                 </p>
                 <div class="flex gap-2">
+                    @if(!$lomExiste)
+         <span class="px-3 py-2 text-[10px] font-bold text-gray-400 uppercase italic">
+             LOM no generado
+         </span>
+                @elseif($lomPublicado)
+                    <span class="px-5 py-2 text-xs font-black text-green-700 uppercase bg-green-50 border border-green-200 rounded-lg">
+                        ✓ LOM Publicado
+                    </span>
+                @else
+                    <button wire:click="publicarLom"
+                        wire:confirm="¿Publicar el LOM con los inscriptos actuales (Habilitados + Sin Clasificar)?"
+                        class="px-5 py-2 text-xs font-black text-white uppercase bg-indigo-600 hover:bg-indigo-700 rounded-lg transition">
+                        Publicar LOM
+                    </button>
+                @endif
                     <button wire:click="cerrarPanel"
                         class="px-5 py-2 text-xs font-bold text-gray-500 hover:text-gray-800 uppercase transition">
                         Cerrar
@@ -397,5 +509,150 @@ new class extends Component {
 
         </div>
     </div>
+
+    {{-- ╔══════════════════════════════════════════════════════════════╗
+         ║  MODAL DE DOCUMENTACIÓN DEL INSCRIPTO                       ║
+         ╚══════════════════════════════════════════════════════════════╝ --}}
+    @if($docModalAbierto && $docInscripto)
+    <div
+        class="fixed inset-0 z-[70] flex items-center justify-center bg-black/50 backdrop-blur-sm"
+        x-data
+        x-on:keydown.escape.window="$wire.cerrarDocModal()"
+    >
+        <div class="bg-white rounded-2xl shadow-2xl w-full max-w-2xl mx-4 flex flex-col max-h-[88vh]">
+
+            {{-- ── HEADER ────────────────────────────────────────────── --}}
+            <div class="flex items-center justify-between px-6 py-4 border-b shrink-0 bg-slate-800 rounded-t-2xl">
+                <div>
+                    <h2 class="text-base font-black text-white uppercase tracking-tight">Documentación</h2>
+                    <p class="text-xs text-slate-300 mt-0.5">
+                        {{ $docInscripto->apellido }} {{ $docInscripto->nombre }} · DNI {{ $docInscripto->dni }}
+                    </p>
+                </div>
+                <button wire:click="cerrarDocModal"
+                    class="text-slate-400 hover:text-white hover:bg-slate-700 rounded-full p-1.5 transition">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+                    </svg>
+                </button>
+            </div>
+
+            <div class="overflow-y-auto flex-1 px-6 py-5 space-y-6">
+
+                @if(empty($docInscripto->docente_id))
+                    <div class="flex items-center gap-2 px-4 py-3 rounded-lg bg-amber-50 border border-amber-200 text-amber-700 text-xs font-semibold">
+                        <svg class="w-4 h-4 shrink-0" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M8.257 3.099c.765-1.36 2.72-1.36 3.486 0l6.517 11.59c.75 1.334-.213 2.98-1.743 2.98H3.483c-1.53 0-2.493-1.646-1.743-2.98l6.517-11.59zM11 14a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V7a1 1 0 00-1-1z" clip-rule="evenodd"/></svg>
+                        Este inscripto no tiene un docente vinculado en el sistema: no hay documentación digital asociada.
+                    </div>
+                @else
+
+                    {{-- Datos generales --}}
+                    <div>
+                        <h3 class="text-[10px] font-black uppercase text-gray-400 tracking-widest mb-2">Datos generales</h3>
+                        <div class="grid grid-cols-2 gap-3">
+                            <div class="px-3 py-2.5 rounded-lg border border-gray-100 bg-gray-50 flex items-center justify-between">
+                                <span class="text-xs font-semibold text-gray-600">Legajo</span>
+                                @if(!empty($docInscripto->tiene_legajo))
+                                    <span class="text-[10px] font-black uppercase text-green-700 bg-green-100 px-2 py-0.5 rounded-full">Sí</span>
+                                @else
+                                    <span class="text-[10px] font-black uppercase text-gray-400 bg-gray-100 px-2 py-0.5 rounded-full">No</span>
+                                @endif
+                            </div>
+                            <div class="px-3 py-2.5 rounded-lg border border-gray-100 bg-gray-50 flex items-center justify-between">
+                                <span class="text-xs font-semibold text-gray-600">Formulario F2</span>
+                                @if(!empty($docInscripto->presento_f2))
+                                    @if(!empty($docInscripto->f2_path))
+                                        <a href="{{ asset('storage/'.$docInscripto->f2_path) }}" target="_blank"
+                                            class="text-[10px] font-black uppercase text-indigo-600 hover:text-indigo-800 underline">
+                                            Ver archivo
+                                        </a>
+                                    @else
+                                        <span class="text-[10px] font-black uppercase text-green-700 bg-green-100 px-2 py-0.5 rounded-full">Sí</span>
+                                    @endif
+                                @else
+                                    <span class="text-[10px] font-black uppercase text-gray-400 bg-gray-100 px-2 py-0.5 rounded-full">No</span>
+                                @endif
+                            </div>
+                        </div>
+                    </div>
+
+                    {{-- Títulos --}}
+                    <div>
+                        <h3 class="text-[10px] font-black uppercase text-gray-400 tracking-widest mb-2">
+                            Títulos ({{ count($docTitulos) }})
+                        </h3>
+                        @if(empty($docTitulos))
+                            <p class="text-xs text-gray-300 italic">No cargó títulos en el sistema.</p>
+                        @else
+                            <div class="space-y-2">
+                                @foreach($docTitulos as $t)
+                                @php $t = is_array($t) ? (object) $t : $t; @endphp
+                                <div class="flex items-center justify-between px-3 py-2.5 rounded-lg border border-gray-100 bg-white shadow-sm">
+                                    <div>
+                                        <div class="text-xs font-bold text-gray-800">{{ $t->nombre_titulo }}</div>
+                                        <div class="text-[10px] text-gray-400">
+                                            {{ $t->institucion ?? '—' }} @if($t->anio_egreso) · {{ $t->anio_egreso }} @endif
+                                        </div>
+                                    </div>
+                                    @if($t->archivo_path)
+                                        <a href="{{ asset('storage/'.$t->archivo_path) }}" target="_blank"
+                                            class="text-[10px] font-black uppercase text-indigo-600 hover:text-indigo-800 underline shrink-0 ml-3">
+                                            Ver archivo
+                                        </a>
+                                    @else
+                                        <span class="text-[10px] text-gray-300 shrink-0 ml-3">Sin archivo</span>
+                                    @endif
+                                </div>
+                                @endforeach
+                            </div>
+                        @endif
+                    </div>
+
+                    {{-- Certificados --}}
+                    <div>
+                        <h3 class="text-[10px] font-black uppercase text-gray-400 tracking-widest mb-2">
+                            Certificados ({{ count($docCertificados) }})
+                        </h3>
+                        @if(empty($docCertificados))
+                            <p class="text-xs text-gray-300 italic">No cargó certificados en el sistema.</p>
+                        @else
+                            <div class="space-y-2">
+                                @foreach($docCertificados as $c)
+                                @php $c = is_array($c) ? (object) $c : $c; @endphp
+                                <div class="flex items-center justify-between px-3 py-2.5 rounded-lg border border-gray-100 bg-white shadow-sm">
+                                    <div>
+                                        <div class="text-xs font-bold text-gray-800">{{ $c->nombre_certificado }}</div>
+                                        @if($c->tipo)
+                                            <div class="text-[10px] text-gray-400">{{ $c->tipo }}</div>
+                                        @endif
+                                    </div>
+                                    @if($c->archivo_path)
+                                        <a href="{{ asset('storage/'.$c->archivo_path) }}" target="_blank"
+                                            class="text-[10px] font-black uppercase text-indigo-600 hover:text-indigo-800 underline shrink-0 ml-3">
+                                            Ver archivo
+                                        </a>
+                                    @else
+                                        <span class="text-[10px] text-gray-300 shrink-0 ml-3">Sin archivo</span>
+                                    @endif
+                                </div>
+                                @endforeach
+                            </div>
+                        @endif
+                    </div>
+
+                @endif
+            </div>
+
+            <div class="flex items-center justify-end px-6 py-4 border-t bg-gray-50 rounded-b-2xl shrink-0">
+                <button wire:click="cerrarDocModal"
+                    class="px-5 py-2 text-xs font-bold text-gray-500 hover:text-gray-800 uppercase transition">
+                    Cerrar
+                </button>
+            </div>
+
+        </div>
+    </div>
+    @endif
+
     @endif
 </div>

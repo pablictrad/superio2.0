@@ -23,6 +23,7 @@ new #[Title('Relación Instituto - Cargo')] class extends Component
 
     // Nuevo registro
     public $newInstitutoId = '';
+    public $newInstitutoNombre = '';
     public $newCargoId     = '';
     public $newTurnoId     = '';
     public $newPerfilId    = '';
@@ -30,6 +31,7 @@ new #[Title('Relación Instituto - Cargo')] class extends Component
     // Edición
     public $editId         = null;
     public $editInstitutoId = '';
+    public $editInstitutoNombre = '';
     public $editCargoId    = '';
     public $editTurnoId    = '';
     public $editPerfilId   = '';
@@ -81,6 +83,7 @@ new #[Title('Relación Instituto - Cargo')] class extends Component
         $rel = RelInstitutoCargo::findOrFail($id);
         $this->editId          = $rel->id;
         $this->editInstitutoId = $rel->instituto_superior_id;
+        $this->editInstitutoNombre = $rel->instituto->nombre ?? '-';
         $this->editCargoId     = $rel->cargo_id;
         $this->editTurnoId     = $rel->turno_id;
         $this->editPerfilId    = $rel->perfil_id;
@@ -302,13 +305,9 @@ new #[Title('Relación Instituto - Cargo')] class extends Component
 
             <flux:field>
                 <flux:label>Instituto</flux:label>
-                <flux:select wire:model="editInstitutoId" searchable size="sm">
-                    <option value="">Seleccione...</option>
-                    @foreach($institutos as $i)
-                        <option value="{{ $i['id'] }}">{{ $i['nombre'] }}</option>
-                    @endforeach
-                </flux:select>
-                <flux:error name="editInstitutoId" />
+                   <div class="rounded-lg border border-zinc-200 bg-zinc-50 px-3 py-2 text-sm font-medium !text-zinc-900 dark:border-zinc-700 dark:bg-zinc-800">
+                    {{ $editInstitutoNombre }}
+                </div>
             </flux:field>
 
             <flux:field>
