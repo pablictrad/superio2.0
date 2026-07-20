@@ -10,40 +10,9 @@ use Livewire\Volt\Component;
 new #[Layout('layouts.publico')]
 class extends Component
 {
-    public $tab = 'abiertos'; // abiertos | cerrados | requisitos
-
     private function tz(): string
     {
         return config('app.timezone', 'America/Argentina/Buenos_Aires');
-    }
-
-    #[Computed(cache: false)]
-    public function requisitosNovedades()
-    {
-        return DB::table('tb_requisitos_novedades')
-            ->orderBy('orden')
-            ->orderByDesc('id')
-            ->get();
-    }
-
-    #[Computed(cache: false)]
-    public function requisitosDocumentos()
-    {
-        return DB::table('tb_requisitos_documentos')->orderBy('id', 'desc')->get();
-    }
-
-    // Mismo mapeo de colores que en el admin, para que las tarjetas coincidan
-    public function claseTarjeta(string $color): array
-    {
-        return match ($color) {
-            'green'  => ['bg' => 'bg-green-50',  'border' => 'border-green-300',  'title' => 'text-green-800',  'badge' => 'bg-green-600'],
-            'red'    => ['bg' => 'bg-red-50',    'border' => 'border-red-300',    'title' => 'text-red-800',    'badge' => 'bg-red-600'],
-            'amber'  => ['bg' => 'bg-amber-50',  'border' => 'border-amber-300',  'title' => 'text-amber-800',  'badge' => 'bg-amber-600'],
-            'blue'   => ['bg' => 'bg-blue-50',   'border' => 'border-blue-300',   'title' => 'text-blue-800',   'badge' => 'bg-blue-600'],
-            'purple' => ['bg' => 'bg-purple-50', 'border' => 'border-purple-300', 'title' => 'text-purple-800', 'badge' => 'bg-purple-600'],
-            'pink'   => ['bg' => 'bg-pink-50',   'border' => 'border-pink-300',   'title' => 'text-pink-800',   'badge' => 'bg-pink-600'],
-            default  => ['bg' => 'bg-indigo-50', 'border' => 'border-indigo-300', 'title' => 'text-indigo-800', 'badge' => 'bg-indigo-600'],
-        };
     }
 
     #[Computed(cache: false)]
@@ -164,74 +133,7 @@ class extends Component
     </div>
     @if (Route::has('login'))
        
-     @endif
-
-    {{-- Solapas: Abiertos / Cerrados / Requisitos --}}
-    <div class="flex gap-2 mb-6 border-b border-gray-200">
-        <button
-            wire:click="$set('tab', 'abiertos')"
-            class="px-4 py-2 text-sm font-black uppercase rounded-t-lg transition-all
-                {{ $tab === 'abiertos'
-                    ? 'bg-green-600 text-white shadow'
-                    : 'bg-gray-100 text-gray-500 hover:bg-gray-200' }}">
-            Convocatorias Abiertas
-        </button>
-        <button
-            wire:click="$set('tab', 'cerrados')"
-            class="px-4 py-2 text-sm font-black uppercase rounded-t-lg transition-all
-                {{ $tab === 'cerrados'
-                    ? 'bg-red-600 text-white shadow'
-                    : 'bg-gray-100 text-gray-500 hover:bg-gray-200' }}">
-            Convocatorias Cerradas
-        </button>
-        <button
-            wire:click="$set('tab', 'requisitos')"
-            class="px-4 py-2 text-sm font-black uppercase rounded-t-lg transition-all
-                {{ $tab === 'requisitos'
-                    ? 'bg-indigo-600 text-white shadow'
-                    : 'bg-gray-100 text-gray-500 hover:bg-gray-200' }}">
-            Requisitos/Novedades
-        </button>
-    </div>
-
-    @if($tab === 'requisitos')
-        {{-- Panel de Requisitos / Novedades --}}
-        <div class="rounded-2xl border border-gray-300 shadow-2xl p-6 bg-white">
-            @if($this->requisitosNovedades->isNotEmpty())
-                <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mb-8">
-                    @foreach($this->requisitosNovedades as $n)
-                        @php $c = $this->claseTarjeta($n->color); @endphp
-                        <div wire:key="pub-nov-{{ $n->id }}"
-                             class="rounded-xl border-2 {{ $c['border'] }} {{ $c['bg'] }} p-4 shadow-sm">
-                            <div class="inline-block {{ $c['badge'] }} text-white text-[10px] font-black uppercase px-2 py-0.5 rounded-full mb-2">
-                                Novedad
-                            </div>
-                            <h3 class="font-black text-sm {{ $c['title'] }} mb-2">{{ $n->titulo }}</h3>
-                            <p class="text-xs text-gray-700 whitespace-pre-line">{{ $n->contenido }}</p>
-                        </div>
-                    @endforeach
-                </div>
-            @else
-                <p class="text-gray-400 italic text-sm mb-6">Aún no hay novedades publicadas.</p>
-            @endif
-
-            @if($this->requisitosDocumentos->isNotEmpty())
-                <div class="border-t border-gray-100 pt-4">
-                    <h3 class="text-xs font-black text-gray-500 uppercase mb-3">Documentos</h3>
-                    <ul class="space-y-2">
-                        @foreach($this->requisitosDocumentos as $doc)
-                            <li>
-                                <a href="{{ asset('storage/' . $doc->archivo) }}" target="_blank"
-                                   class="inline-flex items-center gap-2 text-indigo-600 hover:underline text-sm font-bold">
-                                    📄 {{ $doc->titulo }}
-                                </a>
-                            </li>
-                        @endforeach
-                    </ul>
-                </div>
-            @endif
-        </div>
-    @else
+     @endif                
     <div class="overflow-x-auto rounded-2xl border border-gray-300 shadow-2xl">
 
       
@@ -247,12 +149,7 @@ class extends Component
                 </tr>
             </thead>
             <tbody class="divide-y divide-gray-200">
-                @php
-                    $listado = $tab === 'abiertos'
-                        ? $this->llamados->where('idtb_tipoestado', 8)
-                        : $this->llamados->where('idtb_tipoestado', '!=', 8);
-                @endphp
-                @forelse($listado as $item)
+                @forelse($this->llamados as $item)
                     <tr wire:key="llamado-{{ $item->id }}" class="border-b hover:bg-slate-50 hover:shadow-sm transition-all">
                         <td class="px-1 py-4 align-top text-center overflow-hidden">
                             <div class="text-[10px] font-black text-indigo-600 mb-1">#{{ $item->id }}</div>
@@ -382,17 +279,12 @@ class extends Component
                     </tr>
                 @empty
                     <tr>
-                        <td colspan="6" class="px-4 py-12 text-center text-gray-400 font-bold italic">
-                            @if($tab === 'abiertos')
-                                No hay convocatorias abiertas en este momento.
-                            @else
-                                No hay convocatorias cerradas.
-                            @endif
+                        <td colspan="7" class="px-4 py-12 text-center text-gray-400 font-bold italic">
+                            No hay llamados publicados en este momento.
                         </td>
                     </tr>
                 @endforelse
             </tbody>
         </table>
     </div>
-    @endif
 </div>

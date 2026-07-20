@@ -20,7 +20,7 @@
                 </flux:sidebar.group>
                
                 <flux:sidebar.item icon="plus" :href="route('admin.catalogos')" :current="request()->routeIs('admin.catalogos')" wire:navigate>
-                        {{ __('ABM') }}
+                        {{ __('Gestión Institucional') }}
                 </flux:sidebar.item>
                 <flux:sidebar.item icon="plus" :href="route('admin.rel-instituto-carrera')" :current="request()->routeIs('admin.rel-instituto-carrera')" wire:navigate>
                         {{ __('Instituto-Carrera') }}
@@ -33,7 +33,7 @@
                 </flux:sidebar.item> -->
                 
                 <flux:sidebar.item icon="plus" :href="route('admin.rel-carrera-espacio')" :current="request()->routeIs('admin.rel-carrera-espacio')" wire:navigate>
-                        {{ __('Espacios-Carrera') }}
+                        {{ __('Carrera_Espacios') }}
                 </flux:sidebar.item>
                
                
@@ -43,9 +43,9 @@
                 <flux:sidebar.item icon="plus" :href="route('admin.llamados.publico')" :current="request()->routeIs('admin.llamados.publico')" wire:navigate>
                         {{ __('Ver convocatorias-Publicadas') }}
                 </flux:sidebar.item>    
-                <!-- <flux:sidebar.item icon="plus" :href="route('admin.lom.crear')" :current="request()->routeIs('admin.lom.crear')" wire:navigate>
-                        {{ __('Crear LOM') }}
-                </flux:sidebar.item>    -->
+                <flux:sidebar.item icon="plus" :href="route('admin.requisitos')" :current="request()->routeIs('admin.requisitos')" wire:navigate>
+                        {{ __('Requisitos/Novedades') }}
+                </flux:sidebar.item> 
                 <flux:sidebar.item icon="plus" :href="route('admin.lom.publico')" :current="request()->routeIs('admin.lom.publico')" wire:navigate>
                         {{ __('Ver LOM-Publicado') }}
                 </flux:sidebar.item>   

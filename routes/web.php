@@ -61,6 +61,9 @@ Route::middleware(['auth', 'verified'])->group(function () {
    Volt::route('/admin/lom', 'pages.admin.lom.lomcrear')
     ->name('admin.lom.crear');
      Volt::route('admin/catalogos', 'pages.admin.catalogos.abm-catalogos')->name('admin.catalogos');
+  
+     Volt::route('admin/requisitos', 'pages.admin.requisitos')
+        ->name('admin.requisitos');
 });
  
 // PUBLICAS
