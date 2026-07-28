@@ -12,17 +12,17 @@ class Lom extends Model
     protected $fillable = [
         'id_instituto_superior',
         'idtipo_llamado',
-        'idCarrera',
+        'idcarrera',
         'idtb_cargo',
-        'idEspacioCurricular',
+        'idespaciocurricular',
         'imglom',
         'idtb_tipoestado',
         'idtb_zona',
         'pdf',
         'mes',
         'CUE',
-        'idUsuarioCrear',
-        'idUsuarioEditar',
+        'idusuariocrear',
+        'idusuarioeditar',
         'llamado_id',
     ];
 
@@ -38,7 +38,7 @@ class Lom extends Model
 
     public function carrera()
     {
-        return $this->belongsTo(Carrera::class, 'idCarrera', 'id');
+        return $this->belongsTo(Carrera::class, 'idcarrera', 'id');
     }
 
     public function tipoLlamado()

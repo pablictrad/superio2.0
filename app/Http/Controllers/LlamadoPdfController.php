@@ -43,7 +43,7 @@ class LlamadoPdfController extends Controller
         // ── 2. Detalles: espacios curriculares ───────────────────────────────
         $espacios = DB::table('nuevo_espacios_por_llamado as epl')
             ->join('nuevo_rel_carrera_espacio as rce', 'epl.nuevo_rel_carrera_espacio_id', '=', 'rce.id')
-            ->join('tb_espacioscurriculares as ec',    'rce.espacio_id',   '=', 'ec.idEspacioCurricular')
+            ->join('tb_espacioscurriculares as ec',    'rce.espacio_id',   '=', 'ec.idespaciocurricular')
             ->join('tb_carreras as c',                 'rce.carrera_id',   '=', 'c.id')
             ->join('tb_instituto_superior as inst',    'epl.instituto_id', '=', 'inst.id')
             ->leftJoin('tb_periodo_cursado as per',    'rce.periodo_id',   '=', 'per.idtb_periodo_cursado')
@@ -67,23 +67,23 @@ class LlamadoPdfController extends Controller
             ->get();
 
         // ── 3. Detalles: cargos ──────────────────────────────────────────────
+       // DESPUÉS
         $cargos = DB::table('nuevo_cargo_por_llamado as cpl')
-            ->join('nuevo_rel_carrera_cargo as rcc', 'cpl.nuevo_rel_carrera_cargo_id', '=', 'rcc.id')
-            ->join('tb_cargos as ca',                'rcc.cargo_id',    '=', 'ca.id')
-            ->join('tb_carreras as c',               'rcc.carrera_id',  '=', 'c.id')
-            ->join('tb_instituto_superior as inst',  'cpl.instituto_id','=', 'inst.id')
-            ->leftJoin('tb_periodo_cursado as per',  'rcc.periodo_id',  '=', 'per.idtb_periodo_cursado')
-            ->leftJoin('tb_turnos as t',             'rcc.turno_id',    '=', 't.id')
-            ->leftJoin('tb_perfil as p',             'rcc.perfil_id',   '=', 'p.idtb_perfil')
-            ->join('tb_situacion_revista as sr',     'cpl.situacion_revista_id', '=', 'sr.idtb_situacion_revista')
+            ->join('nuevo_rel_instituto_cargo as ric', 'cpl.nuevo_rel_instituto_cargo_id', '=', 'ric.id')
+            ->join('tb_cargos as ca',                'ric.cargo_id',     '=', 'ca.id')
+            ->join('tb_instituto_superior as inst',  'cpl.instituto_id', '=', 'inst.id')
+            ->leftJoin('tb_carreras as c',            'cpl.carrera_id',   '=', 'c.id')  // nullable: solo Bedel
+           ->leftJoin('tb_turnos as t', 'ric.turno_id', '=', 't.id')
+            ->leftJoin('tb_perfil as p',              'ric.perfil_id',    '=', 'p.idtb_perfil')
+            ->join('tb_situacion_revista as sr',      'cpl.situacion_revista_id', '=', 'sr.idtb_situacion_revista')
             ->where('cpl.llamado_id', $llamadoId)
             ->select(
                 'inst.nombre        as instituto',
                 'c.nombre           as carrera',
                 'ca.nombre_cargo    as nombre',
-                'rcc.hora_catedra',
-                'rcc.anio',
-                'per.nombre_periodo as periodo',
+                DB::raw('NULL as hora_catedra'),   // los cargos no se pagan por hora cátedra
+                DB::raw('NULL as anio'),           // no aplica a cargos
+                DB::raw('NULL as periodo'),        // no aplica a cargos
                 't.nombre_turno     as turno',
                 'p.nombre_perfil    as perfil',
                 'cpl.horario_cargo  as horario',
@@ -91,7 +91,6 @@ class LlamadoPdfController extends Controller
                 DB::raw("'Cargo' as tipo")
             )
             ->get();
-
         $detalles = $espacios->merge($cargos)->values();
 
         // ── 4. Inscriptos habilitados (ordenados por puntaje desc) ───────────

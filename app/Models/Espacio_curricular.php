@@ -7,7 +7,7 @@ use Illuminate\Database\Eloquent\Model;
 class Espacio_curricular extends Model
 {
     protected $table = 'tb_espacioscurriculares';
-    protected $primaryKey = 'idEspacioCurricular';
+    protected $primaryKey = 'idespaciocurricular';
     public $timestamps = false;
     protected $fillable = ['nombre_espacio'];
 

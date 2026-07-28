@@ -50,7 +50,7 @@ new #[Title('Gestión de LOM')] class extends Component
 
         $espaciosPorLlamado = DB::table('nuevo_espacios_por_llamado')
             ->join('nuevo_rel_carrera_espacio', 'nuevo_espacios_por_llamado.nuevo_rel_carrera_espacio_id', '=', 'nuevo_rel_carrera_espacio.id')
-            ->join('tb_espacioscurriculares', 'nuevo_rel_carrera_espacio.espacio_id', '=', 'tb_espacioscurriculares.idEspacioCurricular')
+            ->join('tb_espacioscurriculares', 'nuevo_rel_carrera_espacio.espacio_id', '=', 'tb_espacioscurriculares.idespaciocurricular')
             ->join('tb_carreras', 'nuevo_rel_carrera_espacio.carrera_id', '=', 'tb_carreras.id')
             ->join('tb_instituto_superior', 'nuevo_espacios_por_llamado.instituto_id', '=', 'tb_instituto_superior.id')
             ->leftJoin('tb_periodo_cursado', 'nuevo_rel_carrera_espacio.periodo_id', '=', 'tb_periodo_cursado.idtb_periodo_cursado')
@@ -203,8 +203,8 @@ new #[Title('Gestión de LOM')] class extends Component
                 'llamado_id'           => $this->llamadoSeleccionadoId,
                 'idtb_zona'            => $llamado->idtb_zona,
                 'id_instituto_superior'=> $espacio->instituto_id ?? ($cargo->instituto_id ?? null),
-                'idCarrera'            => $espacio->carrera_id ?? ($cargo->carrera_id ?? null),
-                'idEspacioCurricular'  => $espacio->espacio_id ?? null,
+                'idcarrera'            => $espacio->carrera_id ?? ($cargo->carrera_id ?? null),
+                'idespaciocurricular'  => $espacio->espacio_id ?? null,
                 'idtb_cargo'           => $cargo->cargo_id ?? null,
                 'idtipo_llamado'       => $llamado->idtipo_llamado,
                 'pdf'                  => $pdfPath,

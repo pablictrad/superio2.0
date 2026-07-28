@@ -49,6 +49,9 @@
                 <flux:sidebar.item icon="plus" :href="route('admin.lom.publico')" :current="request()->routeIs('admin.lom.publico')" wire:navigate>
                         {{ __('Ver LOM-Publicado') }}
                 </flux:sidebar.item>   
+                 <flux:sidebar.item icon="plus" :href="route('admin.docentes')" :current="request()->routeIs('admin.docentes')" wire:navigate>
+                        {{ __('Gestionar Docentes') }}
+                </flux:sidebar.item> 
             </flux:sidebar.nav>
 
             <flux:spacer />

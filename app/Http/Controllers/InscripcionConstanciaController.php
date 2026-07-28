@@ -33,7 +33,7 @@ class InscripcionConstanciaController extends Controller
         // ── 3. Espacios del llamado ─────────────────────────────────
         $espacios = DB::table('nuevo_espacios_por_llamado as epl')
             ->join('nuevo_rel_carrera_espacio as rce', 'epl.nuevo_rel_carrera_espacio_id', '=', 'rce.id')
-            ->join('tb_espacioscurriculares as ec',    'rce.espacio_id',   '=', 'ec.idEspacioCurricular')
+            ->join('tb_espacioscurriculares as ec',    'rce.espacio_id',   '=', 'ec.idespaciocurricular')
             ->join('tb_carreras as c',                 'rce.carrera_id',   '=', 'c.id')
             ->join('tb_instituto_superior as inst',    'epl.instituto_id', '=', 'inst.id')
             ->where('epl.llamado_id', $inscripcion->llamado_id)
@@ -41,20 +41,22 @@ class InscripcionConstanciaController extends Controller
             ->get();
 
         // Si el llamado es de cargos en lugar de espacios
+       // DESPUÉS
         if ($espacios->isEmpty()) {
             $espacios = DB::table('nuevo_cargo_por_llamado as cpl')
-                ->join('nuevo_rel_carrera_cargo as rcc', 'cpl.nuevo_rel_carrera_cargo_id', '=', 'rcc.id')
-                ->join('tb_cargos as ca',                'rcc.cargo_id',    '=', 'ca.id')
-                ->join('tb_carreras as c',               'rcc.carrera_id',  '=', 'c.id')
-                ->join('tb_instituto_superior as inst',  'cpl.instituto_id','=', 'inst.id')
+                ->join('nuevo_rel_instituto_cargo as ric', 'cpl.nuevo_rel_instituto_cargo_id', '=', 'ric.id')
+                ->join('tb_cargos as ca',                 'ric.cargo_id',     '=', 'ca.id')
+                ->join('tb_instituto_superior as inst',   'cpl.instituto_id', '=', 'inst.id')
+                ->leftJoin('tb_carreras as c',             'cpl.carrera_id',   '=', 'c.id') // nullable: solo Bedel la tiene
                 ->where('cpl.llamado_id', $inscripcion->llamado_id)
                 ->select('ca.nombre_cargo as nombre', 'c.nombre as carrera', 'inst.nombre as instituto')
                 ->get();
         }
 
-        // ── 4. Títulos y certificados ───────────────────────────────
+        // ── 4. Títulos, certificados y domicilio (DNI/comprobante/zona) ─────
         $titulos      = collect();
         $certificados = collect();
+        $domicilio    = null;
 
         if (!empty($inscripcion->docente_id)) {
             $titulos = DB::table('tb_docente_titulos')
@@ -64,6 +66,19 @@ class InscripcionConstanciaController extends Controller
             $certificados = DB::table('tb_docente_certificados')
                 ->where('docente_id', $inscripcion->docente_id)
                 ->get();
+
+           $domicilio = DB::table('tb_docentes as d')
+            ->join('tb_domicilio as dom', 'd.domicilio_id', '=', 'dom.idtb_domicilio')
+            ->leftJoin('tb_localidades as loc', 'dom.localidad_id', '=', 'loc.id')
+            ->leftJoin('tb_departamentos as dep', 'loc.iddepartamento', '=', 'dep.iddepartamento')
+            ->where('d.id', $inscripcion->docente_id)
+            ->select(
+                'dom.*',
+                'loc.localidad as localidad_nombre',
+                'loc.zona_override',
+                'dep.zona as zona_departamento'
+            )
+         ->first();
         }
 
         // ── 5. Fecha ────────────────────────────────────────────────
@@ -73,7 +88,7 @@ class InscripcionConstanciaController extends Controller
         // ── 6. PDF ──────────────────────────────────────────────────
         $pdf = Pdf::loadView('pdf.constancia', compact(
             'inscripcion', 'llamado', 'espacios',
-            'titulos', 'certificados', 'fechaHoy'
+            'titulos', 'certificados', 'fechaHoy', 'domicilio'
         ))
         ->setPaper('a4', 'portrait')
         ->setOptions([

@@ -374,7 +374,7 @@ new #[Title('Relación Carrera - Espacio')] class extends Component
                     <flux:select wire:model="newEspacioId" size="sm">
                         <option value="">Seleccione...</option>
                         @foreach($this->espaciosNuevoFiltrados as $e)
-                            <option value="{{ $e['idEspacioCurricular'] }}">{{ $e['nombre_espacio'] }}</option>
+                            <option value="{{ $e['idespaciocurricular'] }}">{{ $e['nombre_espacio'] }}</option>
                         @endforeach
                     </flux:select>
                 </flux:field>
@@ -456,7 +456,7 @@ new #[Title('Relación Carrera - Espacio')] class extends Component
                     <flux:input wire:model.live.debounce.300ms="buscarEspacioEdit" icon="magnifying-glass" placeholder="Buscar espacio..." size="sm" class="mb-2" />
                     <flux:select wire:model="editEspacioId" size="sm">
                         @foreach($this->espaciosEditFiltrados as $e)
-                            <flux:select.option value="{{ $e['idEspacioCurricular'] }}">{{ $e['nombre_espacio'] }}</flux:select.option>
+                            <flux:select.option value="{{ $e['idespaciocurricular'] }}">{{ $e['nombre_espacio'] }}</flux:select.option>
                         @endforeach
                     </flux:select>
                 </flux:field>

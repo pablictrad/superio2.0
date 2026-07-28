@@ -49,6 +49,7 @@ new class extends Component {
     public $docInscripto          = null;
     public array $docTitulos      = [];
     public array $docCertificados = [];
+    public $docDomicilio          = null; // fila de tb_domicilio del docente (DNI, factura, certificado, localidad)
 
     /* ── ABRIR PANEL ──────────────────────────────────────────────── */
   
@@ -89,13 +90,52 @@ new class extends Component {
 
     private function cargarInscriptos(): void
     {
-        $this->inscriptos = DB::table('inscripciones_llamado')
+        $rows = DB::table('inscripciones_llamado')
             ->where('llamado_id', $this->llamadoId)
-            ->orderByRaw("FIELD(estado, 'habilitado', 'pendiente', 'sin_clasificar')")
+            ->orderByRaw("
+            CASE estado
+                WHEN 'habilitado' THEN 1
+                WHEN 'pendiente' THEN 2
+                WHEN 'sin_clasificar' THEN 3
+                ELSE 4
+            END
+        ")
             ->orderByDesc('puntaje')
             ->orderBy('apellido')
-            ->get()
-            ->toArray();
+            ->get();
+
+        // Enriquecer con zona real del docente (para auditar el filtro aplicado en la inscripción)
+        foreach ($rows as $ins) {
+            $ins->zona_texto = null;
+
+            if (!empty($ins->docente_id)) {
+                $domicilioId = DB::table('tb_docentes')->where('id', $ins->docente_id)->value('domicilio_id');
+                if ($domicilioId) {
+                    $localidadId = DB::table('tb_domicilio')->where('idtb_domicilio', $domicilioId)->value('localidad_id');
+                    if ($localidadId) {
+                        $ins->zona_texto = $this->resolverZonaTextoDeLocalidad((int) $localidadId);
+                    }
+                }
+            }
+        }
+
+
+        $this->inscriptos = $rows
+        ->map(fn ($item) => (array) $item)
+        ->values()
+        ->all();
+        }
+
+    /* ── ZONA: resolver texto (ej. "IV") desde localidad, con excepción por localidad ── */
+    private function resolverZonaTextoDeLocalidad(int $localidadId): ?string
+    {
+        $localidad = DB::table('tb_localidades')->where('id', $localidadId)->first();
+        if (!$localidad) {
+            return null;
+        }
+
+        return $localidad->zona_override
+            ?: DB::table('tb_departamentos')->where('iddepartamento', $localidad->iddepartamento)->value('zona');
     }
 
     /* ── INICIAR EDICIÓN INLINE ───────────────────────────────────── */
@@ -178,6 +218,26 @@ new class extends Component {
                 ->orderBy('nombre_certificado')
                 ->get()
                 ->toArray();
+
+            $domicilioId = DB::table('tb_docentes')
+                ->where('id', $this->docInscripto->docente_id)
+                ->value('domicilio_id');
+
+            $this->docDomicilio = $domicilioId
+                ? DB::table('tb_domicilio')
+                    ->leftJoin('tb_localidades', 'tb_domicilio.localidad_id', '=', 'tb_localidades.id')
+                    ->leftJoin('tb_departamentos', 'tb_localidades.iddepartamento', '=', 'tb_departamentos.iddepartamento')
+                    ->where('tb_domicilio.idtb_domicilio', $domicilioId)
+                    ->select(
+                        'tb_domicilio.*',
+                        'tb_localidades.localidad as localidad_nombre',
+                        'tb_localidades.zona_override',
+                        'tb_departamentos.zona as zona_departamento'
+                    )
+                    ->first()
+                : null;
+        } else {
+            $this->docDomicilio = null;
         }
 
         $this->docModalAbierto = true;
@@ -190,6 +250,7 @@ new class extends Component {
         $this->docInscripto    = null;
         $this->docTitulos      = [];
         $this->docCertificados = [];
+        $this->docDomicilio    = null;
     }
 
     /* ── CERRAR PANEL ─────────────────────────────────────────────── */
@@ -334,6 +395,7 @@ new class extends Component {
                             <th class="px-3 py-2.5 text-left text-[10px] font-black uppercase text-gray-500 tracking-wider w-28">Teléfono</th>
                             <th class="px-3 py-2.5 text-left text-[10px] font-black uppercase text-gray-500 tracking-wider">Email</th>
                               <th class="px-3 py-2.5 text-left text-[10px] font-black uppercase text-gray-500 tracking-wider">Domicilio</th>
+                            <th class="px-3 py-2.5 text-left text-[10px] font-black uppercase text-gray-500 tracking-wider w-24">Localidad / Zona</th>
                             <th class="px-3 py-2.5 text-center text-[10px] font-black uppercase text-gray-500 tracking-wider w-24">Puntaje</th>
                             <th class="px-3 py-2.5 text-center text-[10px] font-black uppercase text-gray-500 tracking-wider w-28">Estado</th>
                             <th class="px-3 py-2.5 text-center text-[10px] font-black uppercase text-gray-500 tracking-wider w-20">Acc.</th>
@@ -360,6 +422,12 @@ new class extends Component {
                             <td class="px-3 py-2 text-xs text-gray-500">{{ $ins->telefono ?? '—' }}</td>
                             <td class="px-3 py-2 text-xs text-gray-500">{{ $ins->email ?? '—' }}</td>
                             <td class="px-3 py-2 text-xs text-gray-500">{{ $ins->domicilio ?? '—' }}</td>
+                            <td class="px-3 py-2 text-xs">
+                                <div class="text-gray-600">{{ $ins->localidad ?? '—' }}</div>
+                                @if($ins->zona_texto)
+                                    <span class="text-[9px] px-1.5 py-0.5 rounded bg-slate-100 text-slate-600 font-bold uppercase">Zona {{ $ins->zona_texto }}</span>
+                                @endif
+                            </td>
                             <td class="px-3 py-2 text-center">
                                 <input wire:model="editPuntaje" type="number" step="0.01" min="0" max="100"
                                     placeholder="0.00"
@@ -405,6 +473,9 @@ new class extends Component {
                                     @if(!empty($ins->presento_f2))
                                         <span class="text-[9px] px-1.5 py-0.5 rounded bg-purple-50 text-purple-600 font-bold uppercase">F2</span>
                                     @endif
+                                    @if(empty($ins->zona_texto) && !empty($ins->docente_id))
+                                        <span class="text-[9px] px-1.5 py-0.5 rounded bg-gray-50 text-gray-400 font-bold uppercase" title="No se pudo determinar la zona del docente">Zona ?</span>
+                                    @endif
                                 </div>
                                 @if($ins->observaciones)
                                     <div class="text-[10px] text-gray-400 italic mt-0.5">{{ $ins->observaciones }}</div>
@@ -414,6 +485,12 @@ new class extends Component {
                             <td class="px-3 py-2 text-xs text-gray-500">{{ $ins->telefono ?? '—' }}</td>
                             <td class="px-3 py-2 text-xs text-gray-500">{{ $ins->email ?? '—' }}</td>
                             <td class="px-3 py-2 text-xs text-gray-500">{{ $ins->domicilio ?? '—' }}</td>
+                            <td class="px-3 py-2 text-xs">
+                                <div class="text-gray-600">{{ $ins->localidad ?? '—' }}</div>
+                                @if($ins->zona_texto)
+                                    <span class="text-[9px] px-1.5 py-0.5 rounded bg-slate-100 text-slate-600 font-bold uppercase">Zona {{ $ins->zona_texto }}</span>
+                                @endif
+                            </td>
                             <td class="px-3 py-2 text-center">
                                 @if($ins->puntaje !== null)
                                     <span class="font-black text-sm
@@ -574,6 +651,63 @@ new class extends Component {
                                 @endif
                             </div>
                         </div>
+                    </div>
+
+                    {{-- Domicilio: localidad, zona, DNI y comprobante --}}
+                    <div>
+                        <h3 class="text-[10px] font-black uppercase text-gray-400 tracking-widest mb-2">Domicilio y Zona</h3>
+                        @if(!$docDomicilio)
+                            <p class="text-xs text-gray-300 italic">Sin datos de domicilio cargados.</p>
+                        @else
+                        <div class="grid grid-cols-2 gap-3">
+                            <div class="px-3 py-2.5 rounded-lg border border-gray-100 bg-gray-50">
+                                <span class="text-[10px] font-semibold text-gray-500 uppercase block mb-0.5">Localidad</span>
+                                <span class="text-xs font-bold text-gray-700">{{ $docDomicilio->localidad_nombre ?? '—' }}</span>
+                                @php
+                                    $zonaTexto = $docDomicilio->zona_override ?: $docDomicilio->zona_departamento;
+                                @endphp
+                                @if($zonaTexto)
+                                    <span class="ml-1 text-[9px] px-1.5 py-0.5 rounded bg-slate-100 text-slate-600 font-bold uppercase">Zona {{ $zonaTexto }}</span>
+                                @endif
+                            </div>
+                            <div class="px-3 py-2.5 rounded-lg border border-gray-100 bg-gray-50 flex items-center justify-between">
+                                <span class="text-xs font-semibold text-gray-600">DNI</span>
+                                @if($docDomicilio->archivo_dni)
+                                    <a href="{{ asset('storage/'.$docDomicilio->archivo_dni) }}" target="_blank"
+                                        class="text-[10px] font-black uppercase text-indigo-600 hover:text-indigo-800 underline">
+                                        Ver archivo
+                                    </a>
+                                @else
+                                    <span class="text-[10px] font-black uppercase text-red-500 bg-red-50 px-2 py-0.5 rounded-full">Falta</span>
+                                @endif
+                            </div>
+                            <div class="px-3 py-2.5 rounded-lg border border-gray-100 bg-gray-50 flex items-center justify-between">
+                                <span class="text-xs font-semibold text-gray-600">Factura de servicios</span>
+                                @if($docDomicilio->archivo_factura)
+                                    <a href="{{ asset('storage/'.$docDomicilio->archivo_factura) }}" target="_blank"
+                                        class="text-[10px] font-black uppercase text-indigo-600 hover:text-indigo-800 underline">
+                                        Ver archivo
+                                    </a>
+                                @else
+                                    <span class="text-[10px] font-black uppercase text-gray-400 bg-gray-100 px-2 py-0.5 rounded-full">No presentó</span>
+                                @endif
+                            </div>
+                            <div class="px-3 py-2.5 rounded-lg border border-gray-100 bg-gray-50 flex items-center justify-between">
+                                <span class="text-xs font-semibold text-gray-600">Certificado de domicilio</span>
+                                @if($docDomicilio->archivo_certifdomicilio)
+                                    <a href="{{ asset('storage/'.$docDomicilio->archivo_certifdomicilio) }}" target="_blank"
+                                        class="text-[10px] font-black uppercase text-indigo-600 hover:text-indigo-800 underline">
+                                        Ver archivo
+                                    </a>
+                                @else
+                                    <span class="text-[10px] font-black uppercase text-gray-400 bg-gray-100 px-2 py-0.5 rounded-full">No presentó</span>
+                                @endif
+                            </div>
+                        </div>
+                        @if(!$docDomicilio->archivo_factura && !$docDomicilio->archivo_certifdomicilio)
+                            <p class="mt-2 text-[10px] text-red-500 font-bold">⚠ No presentó ni factura ni certificado de domicilio.</p>
+                        @endif
+                        @endif
                     </div>
 
                     {{-- Títulos --}}

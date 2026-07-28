@@ -260,11 +260,7 @@
         <td class="label">Correo Electrónico</td>
         <td class="value">{{ $inscripcion->email ?? '—' }}</td>
         <td class="label">Localidad</td>
-        <td class="value">
-            {{ $inscripcion->localidad ?? '—' }}
-            @php $zonaTexto = ($domicilio->zona_override ?? null) ?: ($domicilio->zona_departamento ?? null); @endphp
-            @if($zonaTexto) (Zona {{ $zonaTexto }}) @endif
-        </td>
+        <td class="value">{{ $inscripcion->localidad ?? '—' }}</td>
     </tr>
     <tr>
         <td class="label">Domicilio</td>
@@ -282,24 +278,6 @@
         <td class="label">Presentó F2</td>
         <td class="value">
             @if($inscripcion->presento_f2)
-                <span class="badge-si">✓ SÍ</span>
-            @else
-                <span class="badge-no">✗ NO</span>
-            @endif
-        </td>
-    </tr>
-    <tr>
-        <td class="label">DNI Presentado</td>
-        <td class="value">
-            @if(!empty($domicilio->archivo_dni ?? null))
-                <span class="badge-si">✓ SÍ</span>
-            @else
-                <span class="badge-no">✗ NO</span>
-            @endif
-        </td>
-        <td class="label">Comprobante Domicilio</td>
-        <td class="value">
-            @if(!empty($domicilio->archivo_factura ?? null) || !empty($domicilio->archivo_certifDomicilio ?? null))
                 <span class="badge-si">✓ SÍ</span>
             @else
                 <span class="badge-no">✗ NO</span>

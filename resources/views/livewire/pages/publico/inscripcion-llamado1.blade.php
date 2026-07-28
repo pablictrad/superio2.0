@@ -50,15 +50,9 @@ new class extends Component {
     public string $dni        = '';
     public string $telefono   = '';
     public string $email      = '';
-    public string $localidad  = ''; // texto legacy, se guarda en inscripciones_llamado.localidad
+    public string $domicilio  = '';
+    public string $localidad  = '';
     public bool   $tieneLegajo = false;
-
-    // Domicilio estructurado (tb_domicilio)
-    public string $calle       = '';
-    public string $numcasapiso = '';
-    public string $piso        = ''; // opcional (depto/piso, ej. "3B")
-    public string $barrio      = '';
-    public string $manzana     = ''; // opcional
 
     // F2 — obligatorio, sin toggle sí/no
     public $archivoF2          = null;
@@ -76,13 +70,7 @@ new class extends Component {
     // Localidad -> resuelve zona (tb_localidades -> tb_departamentos -> tb_zona)
     public ?int  $localidadId = null;
     public ?int  $zonaDocente = null;
-    public ?string $zonaTexto = null;
     public bool  $zonaValida  = true;
-
-    // Domicilio ya cargado: se muestra bloqueado salvo que se solicite cambio de zona
-    public bool $domicilioExistente    = false;
-    public bool $solicitandoCambioZona = false;
-    public ?int $domicilioIdOriginal   = null;
 
     // ── Paso 3: títulos ────────────────────────────────────────────
     // Títulos ya guardados en BD para este docente
@@ -188,9 +176,13 @@ new class extends Component {
                 : null;
 
             if ($domicilio) {
-                $this->cargarDatosDomicilio($domicilio);
-                $this->domicilioExistente  = true;
-                $this->domicilioIdOriginal = $domicilio->idtb_domicilio;
+                $this->localidadId                  = $domicilio->localidad_id;
+                  $this->localidad                    = $domicilio->localidad_id
+                    ? (string) DB::table('tb_localidades')->where('id', $domicilio->localidad_id)->value('localidad')
+                    : '';
+                $this->dniPathExistente             = $domicilio->archivo_dni;
+                $this->facturaPathExistente         = $domicilio->archivo_factura;
+                $this->certifDomicilioPathExistente = $domicilio->archivo_certifDomicilio;
                 $this->actualizarZonaDocente();
             }
 
@@ -220,41 +212,27 @@ new class extends Component {
     {
         $this->mensajeErr = '';
 
-        $editaDomicilio = !$this->domicilioExistente || $this->solicitandoCambioZona;
-
-        $reglasBase = [
-            'apellido'  => 'required|min:2|max:100',
-            'nombre'    => 'required|min:2|max:100',
-            'dni'       => 'required|digits_between:6,9',
-            'telefono'  => 'nullable|max:30',
-            'email'     => 'nullable|email|max:150',
-            'archivoF2' => 'required|file|mimes:pdf|max:5120',
-            'archivoDni' => $this->dniPathExistente
+        $this->validate([
+            'apellido'    => 'required|min:2|max:100',
+            'nombre'      => 'required|min:2|max:100',
+            'dni'         => 'required|digits_between:6,9',
+            'telefono'    => 'nullable|max:30',
+            'email'       => 'nullable|email|max:150',
+            'domicilio'   => 'nullable|max:200',
+            'localidadId' => 'required',
+            'archivoF2'   => 'required|file|mimes:pdf|max:5120',
+            'archivoDni'  => $this->dniPathExistente
                 ? 'nullable|file|mimes:pdf,jpg,jpeg,png|max:10240'
                 : 'required|file|mimes:pdf,jpg,jpeg,png|max:10240',
-        ];
-
-        $reglasDomicilio = $editaDomicilio ? [
-            'calle'                  => 'required|max:75',
-            'numcasapiso'            => 'required|max:11',
-            'piso'                   => 'nullable|max:45',
-            'barrio'                 => 'required|max:45',
-            'manzana'                => 'nullable|max:45',
-            'localidadId'            => 'required',
             'archivoFactura'         => 'nullable|file|mimes:pdf,jpg,jpeg,png|max:10240',
             'archivoCertifDomicilio' => 'nullable|file|mimes:pdf,jpg,jpeg,png|max:10240',
-        ] : [];
-
-        $this->validate(array_merge($reglasBase, $reglasDomicilio), [
+        ], [
             'apellido.required'    => 'El apellido es obligatorio.',
             'nombre.required'      => 'El nombre es obligatorio.',
             'dni.required'         => 'El DNI es obligatorio.',
             'dni.digits_between'   => 'El DNI debe tener entre 6 y 9 dígitos numéricos.',
             'email.email'          => 'El correo electrónico no es válido.',
             'localidadId.required' => 'Seleccione su localidad.',
-            'calle.required'       => 'La calle es obligatoria.',
-            'numcasapiso.required' => 'El número de casa es obligatorio.',
-            'barrio.required'      => 'El barrio es obligatorio.',
             'archivoF2.required'   => 'Debe adjuntar el formulario F2 para continuar. Es un requisito obligatorio.',
             'archivoF2.mimes'      => 'El F2 debe ser un archivo PDF.',
             'archivoF2.max'        => 'El archivo F2 no puede superar 5MB.',
@@ -262,25 +240,18 @@ new class extends Component {
         ]);
 
         // Al menos uno de los dos: factura de servicios o certificado de domicilio
-        // (solo se exige cuando se está cargando/actualizando el domicilio)
-        if ($editaDomicilio) {
-            $tieneProbanteZona = $this->archivoFactura || $this->archivoCertifDomicilio
-                || $this->facturaPathExistente || $this->certifDomicilioPathExistente;
+        $tieneProbanteZona = $this->archivoFactura || $this->archivoCertifDomicilio
+            || $this->facturaPathExistente || $this->certifDomicilioPathExistente;
 
-            if (!$tieneProbanteZona) {
-                $this->addError('archivoFactura', 'Debe adjuntar factura de servicios o certificado de domicilio (al menos uno de los dos).');
-                return;
-            }
+        if (!$tieneProbanteZona) {
+            $this->addError('archivoFactura', 'Debe adjuntar factura de servicios o certificado de domicilio (al menos uno de los dos).');
+            return;
         }
 
         // Bloqueo total por zona
         $this->actualizarZonaDocente();
         if (!$this->zonaValida) {
-            if ($this->domicilioExistente && !$this->solicitandoCambioZona) {
-                $this->mensajeErr = 'Su domicilio registrado pertenece a una zona distinta a la de este llamado. Si se mudó, use el botón "Solicitar cambio de zona".';
-            } else {
-                $this->mensajeErr = 'No puede inscribirse: su localidad pertenece a una zona distinta a la de este llamado.';
-            }
+            $this->mensajeErr = 'No puede inscribirse: su localidad pertenece a una zona distinta a la de este llamado.';
             return;
         }
 
@@ -302,7 +273,6 @@ new class extends Component {
     {
         $localidad = DB::table('tb_localidades')->where('id', $localidadId)->first();
         if (!$localidad) {
-            $this->zonaTexto = null;
             return null;
         }
 
@@ -312,11 +282,9 @@ new class extends Component {
         // 2. Si no hay excepción, tomar la zona del departamento
         if (!$textoZona) {
             $textoZona = DB::table('tb_departamentos')
-                ->where('iddepartamento', $localidad->iddepartamento)
+                ->where('idDepartamento', $localidad->idDepartamento)
                 ->value('zona');
         }
-
-        $this->zonaTexto = $textoZona ?: null;
 
         if (!$textoZona) {
             return null;
@@ -349,63 +317,6 @@ new class extends Component {
 
         $zonaLlamado = DB::table('nuevo_llamado')->where('id', $this->llamadoId)->value('idtb_zona');
         $this->zonaValida = ((int) $this->zonaDocente === (int) $zonaLlamado);
-    }
-
-    /* ═══════════════════════════════════════════════════════════════
-       DOMICILIO EXISTENTE — cargar / bloquear / solicitar cambio de zona
-    ═══════════════════════════════════════════════════════════════ */
-    private function cargarDatosDomicilio(object $domicilio): void
-    {
-        $this->localidadId = $domicilio->localidad_id;
-        $this->localidad    = $domicilio->localidad_id
-            ? (string) DB::table('tb_localidades')->where('id', $domicilio->localidad_id)->value('localidad')
-            : '';
-        $this->calle       = $domicilio->calle        ?? '';
-        $this->numcasapiso = $domicilio->numcasa_piso !== null ? (string) $domicilio->numcasa_piso : '';
-        $this->piso        = $domicilio->piso          ?? '';
-        $this->barrio      = $domicilio->barrio        ?? '';
-        $this->manzana     = $domicilio->manzana       ?? '';
-        $this->dniPathExistente             = $domicilio->archivo_dni;
-        $this->facturaPathExistente         = $domicilio->archivo_factura;
-        $this->certifDomicilioPathExistente = $domicilio->archivo_certifdomicilio;
-    }
-
-    /**
-     * El docente indica que se mudó: habilita los campos de domicilio para
-     * cargar la dirección nueva. No se pisa el domicilio vigente hasta que
-     * el admin apruebe el cambio (queda como fila nueva en tb_domicilio,
-     * estado "Cambio de zona solicitado").
-     */
-    public function solicitarCambioZona(): void
-    {
-        $this->solicitandoCambioZona = true;
-
-        $this->calle       = '';
-        $this->numcasapiso = '';
-        $this->piso        = '';
-        $this->barrio      = '';
-        $this->manzana     = '';
-        $this->localidadId = null;
-        $this->zonaDocente = null;
-        $this->zonaValida  = true;
-
-        // El comprobante de domicilio debe ser nuevo (prueba la dirección nueva).
-        // El DNI no cambia por una mudanza, se conserva el ya cargado.
-        $this->facturaPathExistente         = null;
-        $this->certifDomicilioPathExistente = null;
-    }
-
-    public function cancelarCambioZona(): void
-    {
-        $this->solicitandoCambioZona = false;
-
-        if ($this->domicilioIdOriginal) {
-            $domicilio = DB::table('tb_domicilio')->where('idtb_domicilio', $this->domicilioIdOriginal)->first();
-            if ($domicilio) {
-                $this->cargarDatosDomicilio($domicilio);
-                $this->actualizarZonaDocente();
-            }
-        }
     }
 
     /* ═══════════════════════════════════════════════════════════════
@@ -645,50 +556,25 @@ new class extends Component {
                 $certifPath = $this->archivoCertifDomicilio->store('docentes/domicilio', 'public');
             }
 
-            // 4.2 Domicilio: reutilizar vigente, crear nuevo, o versionar por cambio de zona
-            $domicilioIdVigente = DB::table('tb_docentes')->where('id', $docenteId)->value('domicilio_id');
+            // 4.2 Crear o actualizar tb_domicilio y vincularlo al docente
+            $domicilioId = DB::table('tb_docentes')->where('id', $docenteId)->value('domicilio_id');
 
-            if ($this->domicilioExistente && !$this->solicitandoCambioZona) {
-                // Domicilio ya cargado y sin cambios: no se toca tb_domicilio
-                $domicilioId = $domicilioIdVigente;
+            $datosDomicilio = [
+                'localidad_id'            => $this->localidadId,
+                'docente_id'              => $docenteId,
+                'archivo_dni'             => $dniPath,
+                'archivo_factura'         => $facturaPath,
+                'archivo_certifDomicilio' => $certifPath,
+                'updated_at'              => now(),
+            ];
+
+            if ($domicilioId) {
+                DB::table('tb_domicilio')->where('idtb_domicilio', $domicilioId)->update($datosDomicilio);
             } else {
-                $datosDomicilio = [
-                    'calle'                   => trim($this->calle),
-                    'numcasa_piso'            => (int) preg_replace('/\D/', '', $this->numcasapiso) ?: null,
-                    'piso'                    => trim($this->piso)  ?: null,
-                    'barrio'                  => trim($this->barrio),
-                    'manzana'                 => trim($this->manzana) ?: null,
-                    'localidad_id'            => $this->localidadId,
-                    'docente_id'              => $docenteId,
-                    'archivo_dni'             => $dniPath,
-                    'archivo_factura'         => $facturaPath,
-                    'archivo_certifdomicilio' => $certifPath,
-                    'created_at'              => now(),
-                    'updated_at'              => now(),
-                ];
-
-                if ($this->solicitandoCambioZona) {
-                    // Fila NUEVA (historial): no pisa la vigente hasta que el admin la apruebe
-                    $datosDomicilio['tipoestado_id'] = 4; // Cambio de zona solicitado
-                    $domicilioId = DB::table('tb_domicilio')
-    ->insertGetId($datosDomicilio, 'idtb_domicilio');
-                    // tb_docentes.domicilio_id sigue apuntando al domicilio vigente a propósito
-                } else {
-                    // Docente nuevo o sin domicilio previo
-                    $datosDomicilio['tipoestado_id'] = 1; // Pendiente de verificación
-                    $domicilioId = DB::table('tb_domicilio')
-    ->insertGetId($datosDomicilio, 'idtb_domicilio');
-                    DB::table('tb_docentes')->where('id', $docenteId)->update(['domicilio_id' => $domicilioId]);
-                }
+                $datosDomicilio['created_at'] = now();
+                $domicilioId = DB::table('tb_domicilio')->insertGetId($datosDomicilio);
+                DB::table('tb_docentes')->where('id', $docenteId)->update(['domicilio_id' => $domicilioId]);
             }
-
-            // Domicilio compuesto (texto legible, para el campo legacy inscripciones_llamado.domicilio)
-            $domicilioTexto = trim(implode(', ', array_filter([
-                trim($this->calle) . ' ' . trim($this->numcasapiso),
-                $this->piso ? 'Piso ' . trim($this->piso) : null,
-                $this->barrio ? 'B° ' . trim($this->barrio) : null,
-                $this->manzana ? 'Mz ' . trim($this->manzana) : null,
-            ])));
 
             // 5. Generar código de constancia único
             $codigo = strtoupper('INS-' . date('Y') . '-' . str_pad($this->llamadoId, 4, '0', STR_PAD_LEFT) . '-' . strtoupper(Str::random(6)));
@@ -702,7 +588,7 @@ new class extends Component {
                 'dni'                    => $dni,
                 'telefono'               => trim($this->telefono) ?: null,
                 'email'                  => trim($this->email)    ?: null,
-                'domicilio'              => $domicilioTexto ?: null,
+                'domicilio'              => trim($this->domicilio) ?: null,
                 'localidad'              => trim($this->localidad) ?: null,
                 'tiene_legajo'           => $this->tieneLegajo,
                 'presento_f2'            => true, // siempre true: el F2 es obligatorio para llegar a este punto
@@ -741,14 +627,12 @@ new class extends Component {
         $this->reset([
             'llamadoId','llamado','paso',
             'dniBusqueda','docenteExiste','docenteEncontrado',
-            'apellido','nombre','dni','telefono','email',
-            'calle','numcasapiso','piso','barrio','manzana','localidad',
+            'apellido','nombre','dni','telefono','email','domicilio','localidad',
             'tieneLegajo','archivoF2',
             'archivoDni','dniPathExistente',
             'archivoFactura','facturaPathExistente',
             'archivoCertifDomicilio','certifDomicilioPathExistente',
-            'localidadId','zonaDocente','zonaTexto','zonaValida',
-            'domicilioExistente','solicitandoCambioZona','domicilioIdOriginal',
+            'localidadId','zonaDocente','zonaValida',
             'titulosExistentes','titulosPendientes',
             'nuevoTituloNombre','nuevoTituloInstitucion','nuevoTituloAnio','nuevoTituloArchivo',
             'errorTitulo',
@@ -768,7 +652,7 @@ new class extends Component {
     x-data
     x-on:keydown.escape.window="$wire.cerrarModal()"
 >
-    <div class="bg-white rounded-2xl shadow-2xl w-full max-w-4xl mx-4 flex flex-col max-h-[94vh]">
+    <div class="bg-white rounded-2xl shadow-2xl w-full max-w-2xl mx-4 flex flex-col max-h-[94vh]">
 
         {{-- ══ HEADER ══════════════════════════════════════════════════ --}}
         <div class="flex items-center justify-between px-6 py-4 border-b shrink-0 bg-slate-800 rounded-t-2xl">
@@ -829,7 +713,15 @@ new class extends Component {
         {{-- ══ BODY ═════════════════════════════════════════════════════ --}}
         <div class="overflow-y-auto flex-1 px-6 py-5">
 
-           
+            {{-- Error global --}}
+            @if($mensajeErr)
+            <div class="mb-4 flex items-start gap-2 p-3 bg-red-50 border border-red-200 rounded-xl text-red-700 text-sm">
+                <svg class="w-4 h-4 shrink-0 mt-0.5" fill="currentColor" viewBox="0 0 20 20">
+                    <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clip-rule="evenodd"/>
+                </svg>
+                <span class="font-semibold">{{ $mensajeErr }}</span>
+            </div>
+            @endif
 
             {{-- ══════════════════════════════════════════════════════════
                  PASO 1 — BÚSQUEDA POR DNI
@@ -862,15 +754,6 @@ new class extends Component {
                             autofocus
                         >
                     </div>
-                     {{-- Error global --}}
-                    @if($mensajeErr)
-                    <div class="mb-4 flex items-start gap-2 p-3 bg-red-50 border border-red-200 rounded-xl text-red-700 text-sm">
-                        <svg class="w-4 h-4 shrink-0 mt-0.5" fill="currentColor" viewBox="0 0 20 20">
-                            <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clip-rule="evenodd"/>
-                        </svg>
-                        <span class="font-semibold">{{ $mensajeErr }}</span>
-                    </div>
-                    @endif
                     @error('dniBusqueda')
                         <p class="mt-1 text-xs text-red-600 font-semibold">{{ $message }}</p>
                     @enderror
@@ -931,9 +814,7 @@ new class extends Component {
             </div>
             @endif
 
-            @php $editaDomicilio = !$domicilioExistente || $solicitandoCambioZona; @endphp
-
-            <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
 
                 {{-- Apellido --}}
                 <div>
@@ -989,143 +870,39 @@ new class extends Component {
                                @error('email') border-red-400 bg-red-50 @enderror">
                     @error('email') <p class="mt-1 text-xs text-red-600 font-medium">{{ $message }}</p> @enderror
                 </div>
-            </div>
 
-            {{-- ══ DOMICILIO Y LOCALIDAD ══════════════════════════════ --}}
-            <div class="mt-4 border border-gray-200 rounded-xl p-4 bg-gray-50/60">
-                <div class="flex items-center justify-between mb-3">
-                    <label class="block text-xs font-black text-gray-600 uppercase tracking-wide">
-                        Domicilio y Localidad
+                {{-- Domicilio --}}
+                <div>
+                    <label class="block text-xs font-black text-gray-600 mb-1 uppercase tracking-wide">
+                        Domicilio
                     </label>
-                    @if($domicilioExistente && !$solicitandoCambioZona)
-                        <span class="text-[10px] font-black uppercase text-gray-400 bg-gray-100 px-2 py-0.5 rounded-full">
-                            🔒 Registrado
-                        </span>
-                    @elseif($solicitandoCambioZona)
-                        <span class="text-[10px] font-black uppercase text-amber-600 bg-amber-50 px-2 py-0.5 rounded-full">
-                            Nuevo domicilio propuesto
-                        </span>
-                    @endif
+                    <input wire:model="domicilio" type="text" placeholder="Calle, número, barrio"
+                        class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-400 focus:border-indigo-400 transition">
                 </div>
 
-                @if($domicilioExistente && !$solicitandoCambioZona)
-                    {{-- MODO BLOQUEADO: domicilio ya cargado, solo lectura --}}
-                    <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 text-sm">
-                        <div class="sm:col-span-3">
-                            <span class="block text-[10px] font-bold text-gray-400 uppercase">Localidad</span>
-                            <span class="text-gray-700 font-medium">
-                                {{ $localidad ?: '—' }}
-                                @if($zonaTexto)
-                                    <span class="text-xs text-gray-400 font-normal">(Zona {{ $zonaTexto }})</span>
-                                @endif
-                            </span>
-                        </div>
-                        <div class="sm:col-span-2">
-                            <span class="block text-[10px] font-bold text-gray-400 uppercase">Calle</span>
-                            <span class="text-gray-700">{{ $calle ?: '—' }} {{ $numcasapiso }}</span>
-                        </div>
-                        <div>
-                            <span class="block text-[10px] font-bold text-gray-400 uppercase">Piso/Depto</span>
-                            <span class="text-gray-700">{{ $piso ?: '—' }}</span>
-                        </div>
-                        <div class="sm:col-span-2">
-                            <span class="block text-[10px] font-bold text-gray-400 uppercase">Barrio</span>
-                            <span class="text-gray-700">{{ $barrio ?: '—' }}</span>
-                        </div>
-                        <div>
-                            <span class="block text-[10px] font-bold text-gray-400 uppercase">Manzana</span>
-                            <span class="text-gray-700">{{ $manzana ?: '—' }}</span>
-                        </div>
-                    </div>
+                {{-- Localidad --}}
+                <div>
+                    <label class="block text-xs font-black text-gray-600 mb-1 uppercase tracking-wide">
+                        Localidad <span class="text-red-500">*</span>
+                    </label>
+                    <select wire:model.live="localidadId"
+                        class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-400 focus:border-indigo-400 transition
+                               @error('localidadId') border-red-400 bg-red-50 @enderror">
+                        <option value="">Seleccione su localidad...</option>
+                        @foreach(DB::table('tb_localidades')->orderBy('localidad')->get() as $loc)
+                            <option value="{{ $loc->id }}">{{ $loc->localidad }}</option>
+                        @endforeach
+                    </select>
+                    @error('localidadId') <p class="mt-1 text-xs text-red-600 font-medium">{{ $message }}</p> @enderror
 
-               
-                @else
-                    {{-- MODO EDITABLE: docente nuevo o solicitando cambio de zona --}}
-                    @if($solicitandoCambioZona)
-                    <div class="mb-3 bg-amber-50 border border-amber-200 rounded-lg p-2.5 flex items-center justify-between gap-3">
-                        <p class="text-xs text-amber-700">
-                            Complete su nueva dirección. Quedará sujeta a aprobación de la comisión.
+                    @if(!$zonaValida)
+                    <div class="mt-2 bg-red-50 border-2 border-red-300 rounded-xl p-3">
+                        <p class="text-xs font-black text-red-700">
+                            ⚠ Su localidad pertenece a una zona distinta a la de este llamado. No puede continuar con la inscripción.
                         </p>
-                        <button type="button" wire:click="cancelarCambioZona"
-                            class="text-xs font-bold text-amber-700 underline shrink-0">
-                            Cancelar
-                        </button>
                     </div>
                     @endif
-
-                    <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                        <div class="sm:col-span-3">
-                                @if(!$zonaValida)
-                            <div class="mt-3 bg-red-50 border-2 border-red-300 rounded-xl p-3">
-                                <p class="text-xs font-black text-red-700">
-                                    ⚠ Su localidad pertenece a una zona distinta a la de este llamado. No puede continuar con la inscripción.
-                                </p>
-                            </div>
-                            @endif
-                            <label class="block text-[10px] font-bold text-gray-500 mb-1 uppercase">
-                                Localidad <span class="text-red-500">*</span>
-                            </label>
-                            <select wire:model.live="localidadId"
-                                class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-400 focus:border-indigo-400 transition
-                                       @error('localidadId') border-red-400 bg-red-50 @enderror">
-                                <option value="">Seleccione su localidad...</option>
-                                @foreach(DB::table('tb_localidades')->orderBy('localidad')->get() as $loc)
-                                    <option value="{{ $loc->id }}">{{ $loc->localidad }}</option>
-                                @endforeach
-                            </select>
-                            @error('localidadId') <p class="mt-1 text-xs text-red-600 font-medium">{{ $message }}</p> @enderror
-                        </div>
-                        
-                                <div class="sm:col-span-2">
-                            <label class="block text-[10px] font-bold text-gray-500 mb-1 uppercase">
-                                Calle <span class="text-red-500">*</span>
-                            </label>
-                            <input wire:model="calle" type="text" placeholder="Ej: Av. Ortiz de Ocampo"
-                                class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-400 focus:border-indigo-400 transition
-                                       @error('calle') border-red-400 bg-red-50 @enderror">
-                            @error('calle') <p class="mt-1 text-xs text-red-600 font-medium">{{ $message }}</p> @enderror
-                        </div>
-                        <div>
-                            <label class="block text-[10px] font-bold text-gray-500 mb-1 uppercase">
-                                N° Casa <span class="text-red-500">*</span>
-                            </label>
-                            <input wire:model="numcasapiso" type="text" placeholder="1700"
-                                class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-400 focus:border-indigo-400 transition
-                                       @error('numcasapiso') border-red-400 bg-red-50 @enderror">
-                            @error('numcasapiso') <p class="mt-1 text-xs text-red-600 font-medium">{{ $message }}</p> @enderror
-                        </div>
-
-                        <div>
-                            <label class="block text-[10px] font-bold text-gray-500 mb-1 uppercase">
-                                Piso/Depto <span class="text-gray-400 normal-case">(opcional)</span>
-                            </label>
-                            <input wire:model="piso" type="text" placeholder="3B"
-                                class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-400 focus:border-indigo-400 transition">
-                        </div>
-                        <div class="sm:col-span-2">
-                            <label class="block text-[10px] font-bold text-gray-500 mb-1 uppercase">
-                                Barrio <span class="text-red-500">*</span>
-                            </label>
-                            <input wire:model="barrio" type="text" placeholder="Ej: Evita"
-                                class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-400 focus:border-indigo-400 transition
-                                       @error('barrio') border-red-400 bg-red-50 @enderror">
-                            @error('barrio') <p class="mt-1 text-xs text-red-600 font-medium">{{ $message }}</p> @enderror
-                        </div>
-
-                        <div class="sm:col-span-3">
-                            <label class="block text-[10px] font-bold text-gray-500 mb-1 uppercase">
-                                Manzana <span class="text-gray-400 normal-case">(opcional)</span>
-                            </label>
-                            <input wire:model="manzana" type="text" placeholder="Ej: Mz 14"
-                                class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-400 focus:border-indigo-400 transition">
-                        </div>
-                    </div>
-
-                 
-                @endif
-            </div>
-
-            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-4">
+                </div>
 
                 {{-- Legajo --}}
                 <div class="sm:col-span-2">
@@ -1200,42 +977,34 @@ new class extends Component {
                 {{-- Factura o Certificado de domicilio (alcanza con uno) --}}
                 <div class="sm:col-span-2">
                     <label class="block text-xs font-black text-gray-600 mb-2 uppercase tracking-wide">
-                        Comprobante de residencia en la zona
-                        @if($editaDomicilio) <span class="text-red-500">*</span> @endif
+                        Comprobante de residencia en la zona <span class="text-red-500">*</span>
                     </label>
+                    <p class="text-[10px] text-gray-400 mb-2">
+                        Adjunte factura de servicios (luz/agua/gas), contrato de alquiler, o certificado de domicilio. Alcanza con uno de los dos campos siguientes.
+                    </p>
 
-                    @if($editaDomicilio)
-                        <p class="text-[10px] text-gray-400 mb-2">
-                            Adjunte factura de servicios (luz/agua/gas), contrato de alquiler, o certificado de domicilio. Alcanza con uno de los dos campos siguientes.
-                        </p>
-
-                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                            <div class="bg-indigo-50 border-2 rounded-xl p-3 {{ $errors->has('archivoFactura') ? 'border-red-400 bg-red-50' : 'border-indigo-200' }}">
-                                <label class="block text-xs font-black text-indigo-700 mb-1.5 uppercase">
-                                    {{ $facturaPathExistente ? 'Reemplazar factura (opcional)' : 'Factura de servicios / contrato' }}
-                                </label>
-                                <input type="file" wire:model="archivoFactura" accept=".pdf,.jpg,.jpeg,.png"
-                                    class="w-full border border-indigo-300 rounded-lg text-xs p-2 bg-white shadow-sm">
-                                <div wire:loading wire:target="archivoFactura" class="text-xs text-indigo-500 mt-1">Subiendo...</div>
-                                @if($facturaPathExistente)<p class="mt-1 text-xs text-green-600 font-bold">✓ Ya tiene cargado</p>@endif
-                            </div>
-
-                            <div class="bg-indigo-50 border-2 rounded-xl p-3">
-                                <label class="block text-xs font-black text-indigo-700 mb-1.5 uppercase">
-                                    {{ $certifDomicilioPathExistente ? 'Reemplazar certificado (opcional)' : 'Certificado de domicilio' }}
-                                </label>
-                                <input type="file" wire:model="archivoCertifDomicilio" accept=".pdf,.jpg,.jpeg,.png"
-                                    class="w-full border border-indigo-300 rounded-lg text-xs p-2 bg-white shadow-sm">
-                                <div wire:loading wire:target="archivoCertifDomicilio" class="text-xs text-indigo-500 mt-1">Subiendo...</div>
-                                @if($certifDomicilioPathExistente)<p class="mt-1 text-xs text-green-600 font-bold">✓ Ya tiene cargado</p>@endif
-                            </div>
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <div class="bg-indigo-50 border-2 rounded-xl p-3 {{ $errors->has('archivoFactura') ? 'border-red-400 bg-red-50' : 'border-indigo-200' }}">
+                            <label class="block text-xs font-black text-indigo-700 mb-1.5 uppercase">
+                                {{ $facturaPathExistente ? 'Reemplazar factura (opcional)' : 'Factura de servicios / contrato' }}
+                            </label>
+                            <input type="file" wire:model="archivoFactura" accept=".pdf,.jpg,.jpeg,.png"
+                                class="w-full border border-indigo-300 rounded-lg text-xs p-2 bg-white shadow-sm">
+                            <div wire:loading wire:target="archivoFactura" class="text-xs text-indigo-500 mt-1">Subiendo...</div>
+                            @if($facturaPathExistente)<p class="mt-1 text-xs text-green-600 font-bold">✓ Ya tiene cargado</p>@endif
                         </div>
-                        @error('archivoFactura') <p class="mt-1 text-xs text-red-600 font-bold">{{ $message }}</p> @enderror
-                    @else
-                        <div class="bg-gray-50 border border-gray-200 rounded-xl p-3 text-xs text-gray-500">
-                            ✓ Comprobante ya presentado junto con el domicilio registrado.
+
+                        <div class="bg-indigo-50 border-2 rounded-xl p-3">
+                            <label class="block text-xs font-black text-indigo-700 mb-1.5 uppercase">
+                                {{ $certifDomicilioPathExistente ? 'Reemplazar certificado (opcional)' : 'Certificado de domicilio' }}
+                            </label>
+                            <input type="file" wire:model="archivoCertifDomicilio" accept=".pdf,.jpg,.jpeg,.png"
+                                class="w-full border border-indigo-300 rounded-lg text-xs p-2 bg-white shadow-sm">
+                            <div wire:loading wire:target="archivoCertifDomicilio" class="text-xs text-indigo-500 mt-1">Subiendo...</div>
+                            @if($certifDomicilioPathExistente)<p class="mt-1 text-xs text-green-600 font-bold">✓ Ya tiene cargado</p>@endif
                         </div>
-                    @endif
+                    </div>
+                    @error('archivoFactura') <p class="mt-1 text-xs text-red-600 font-bold">{{ $message }}</p> @enderror
                 </div>
 
             </div>

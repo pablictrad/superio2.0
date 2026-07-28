@@ -172,7 +172,7 @@ new class extends Component {
 
         if ($value && $this->instituto_id) {
             $rows = DB::table('nuevo_rel_carrera_espacio')
-                ->join('tb_espacioscurriculares', 'nuevo_rel_carrera_espacio.espacio_id', '=', 'tb_espacioscurriculares.idEspacioCurricular')
+                ->join('tb_espacioscurriculares', 'nuevo_rel_carrera_espacio.espacio_id', '=', 'tb_espacioscurriculares.idespaciocurricular')
                 ->where('nuevo_rel_carrera_espacio.carrera_id', $value)
                 ->where('nuevo_rel_carrera_espacio.instituto_id', $this->instituto_id)
                 ->select('nuevo_rel_carrera_espacio.id', 'tb_espacioscurriculares.nombre_espacio')
@@ -266,7 +266,7 @@ new class extends Component {
             $this->crearFilaLom($llamado, [
                 'id_instituto_superior' => $e->instituto_id,
                 'idCarrera'             => $e->carrera_id,
-                'idEspacioCurricular'   => $e->espacio_id,
+                'idespaciocurricular'   => $e->espacio_id,
                 'idtb_cargo'            => null,
             ]);
         }
@@ -287,7 +287,7 @@ new class extends Component {
                 'id_instituto_superior' => $c->instituto_id,
                 'idCarrera'             => $c->carrera_id,
                 'idtb_cargo'            => $c->cargo_id,
-                'idEspacioCurricular'   => null,
+                'idespaciocurricular'   => null,
             ]);
         }
     }
@@ -298,7 +298,7 @@ new class extends Component {
         $yaExiste = DB::table('tb_lom')
             ->where('llamado_id', $llamado->id)
             ->where('idtb_cargo', $detalle['idtb_cargo'])
-            ->where('idEspacioCurricular', $detalle['idEspacioCurricular'])
+            ->where('idespaciocurricular', $detalle['idespaciocurricular'])
             ->exists();
 
         if ($yaExiste) return;
@@ -310,7 +310,7 @@ new class extends Component {
             'id_instituto_superior' => $detalle['id_instituto_superior'],
             'idCarrera'             => $detalle['idCarrera'],
             'idtb_cargo'            => $detalle['idtb_cargo'],
-            'idEspacioCurricular'   => $detalle['idEspacioCurricular'],
+            'idespaciocurricular'   => $detalle['idespaciocurricular'],
             'idtb_tipoestado'       => 9, // generado, todavía no publicado
             'created_at'            => now(),
             'updated_at'            => now(),
@@ -380,7 +380,7 @@ new class extends Component {
        } else {
 
             $rel = DB::table('nuevo_rel_carrera_espacio')
-                ->join('tb_espacioscurriculares', 'nuevo_rel_carrera_espacio.espacio_id', '=', 'tb_espacioscurriculares.idEspacioCurricular')
+                ->join('tb_espacioscurriculares', 'nuevo_rel_carrera_espacio.espacio_id', '=', 'tb_espacioscurriculares.idespaciocurricular')
                 ->leftJoin('tb_periodo_cursado',  'nuevo_rel_carrera_espacio.periodo_id', '=', 'tb_periodo_cursado.idtb_periodo_cursado')
                 ->leftJoin('tb_turnos',           'nuevo_rel_carrera_espacio.turno_id',   '=', 'tb_turnos.id')
                 ->leftJoin('tb_perfil',           'nuevo_rel_carrera_espacio.perfil_id',  '=', 'tb_perfil.idtb_perfil')
@@ -483,7 +483,7 @@ new class extends Component {
                 
             $this->carrera_id = $det['carrera_id'];
             $this->espacios = DB::table('nuevo_rel_carrera_espacio')
-                ->join('tb_espacioscurriculares', 'nuevo_rel_carrera_espacio.espacio_id', '=', 'tb_espacioscurriculares.idEspacioCurricular')
+                ->join('tb_espacioscurriculares', 'nuevo_rel_carrera_espacio.espacio_id', '=', 'tb_espacioscurriculares.idespaciocurricular')
                 ->where('nuevo_rel_carrera_espacio.carrera_id', $det['carrera_id'])
                 ->where('nuevo_rel_carrera_espacio.instituto_id', $det['instituto_id'])
                 ->select('nuevo_rel_carrera_espacio.id', 'tb_espacioscurriculares.nombre_espacio')
@@ -618,7 +618,7 @@ new class extends Component {
         // Cargar espacios
         $espacios = DB::table('nuevo_espacios_por_llamado')
             ->join('nuevo_rel_carrera_espacio', 'nuevo_espacios_por_llamado.nuevo_rel_carrera_espacio_id', '=', 'nuevo_rel_carrera_espacio.id')
-            ->join('tb_espacioscurriculares',   'nuevo_rel_carrera_espacio.espacio_id',  '=', 'tb_espacioscurriculares.idEspacioCurricular')
+            ->join('tb_espacioscurriculares',   'nuevo_rel_carrera_espacio.espacio_id',  '=', 'tb_espacioscurriculares.idespaciocurricular')
             ->join('tb_carreras',               'nuevo_rel_carrera_espacio.carrera_id',  '=', 'tb_carreras.id')
             ->leftJoin('tb_periodo_cursado',    'nuevo_rel_carrera_espacio.periodo_id',  '=', 'tb_periodo_cursado.idtb_periodo_cursado')
             ->leftJoin('tb_turnos',             'nuevo_rel_carrera_espacio.turno_id',    '=', 'tb_turnos.id')
@@ -813,7 +813,7 @@ new class extends Component {
  
         $espaciosPorLlamado = DB::table('nuevo_espacios_por_llamado')
             ->join('nuevo_rel_carrera_espacio',  'nuevo_espacios_por_llamado.nuevo_rel_carrera_espacio_id', '=', 'nuevo_rel_carrera_espacio.id')
-            ->join('tb_espacioscurriculares',    'nuevo_rel_carrera_espacio.espacio_id',  '=', 'tb_espacioscurriculares.idEspacioCurricular')
+            ->join('tb_espacioscurriculares',    'nuevo_rel_carrera_espacio.espacio_id',  '=', 'tb_espacioscurriculares.idespaciocurricular')
             ->join('tb_carreras',                'nuevo_rel_carrera_espacio.carrera_id',  '=', 'tb_carreras.id')
             ->leftJoin('tb_periodo_cursado',     'nuevo_rel_carrera_espacio.periodo_id',  '=', 'tb_periodo_cursado.idtb_periodo_cursado')
             ->leftJoin('tb_turnos',              'nuevo_rel_carrera_espacio.turno_id',    '=', 'tb_turnos.id')

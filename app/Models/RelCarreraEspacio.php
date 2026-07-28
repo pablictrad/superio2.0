@@ -22,7 +22,7 @@ class RelCarreraEspacio extends Model
     }
     public function espacio()
     {
-         return $this->belongsTo(Espacio_curricular::class, 'espacio_id', 'idEspacioCurricular');
+         return $this->belongsTo(Espacio_curricular::class, 'espacio_id', 'idespaciocurricular');
     }
     public function turno()
     {       

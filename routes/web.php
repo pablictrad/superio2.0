@@ -64,6 +64,9 @@ Route::middleware(['auth', 'verified'])->group(function () {
   
      Volt::route('admin/requisitos', 'pages.admin.requisitos')
         ->name('admin.requisitos');
+
+     Volt::route('admin/docentes', 'pages.admin.docentes.gestionar-docentes')
+        ->name('admin.docentes');
 });
  
 // PUBLICAS

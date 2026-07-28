@@ -239,7 +239,7 @@ new class extends Component
                             class="border rounded px-2 py-1 w-full">
 
                             @foreach($espacios as $e)
-                                <option value="{{ $e['idEspacioCurricular'] }}">
+                                <option value="{{ $e['idespaciocurricular'] }}">
                                     {{ $e['nombre_espacio'] }}
                                 </option>
                             @endforeach
@@ -357,7 +357,7 @@ new class extends Component
                 <select wire:model="nuevo.espacio_id" class="border rounded px-3 py-2 w-full">
                     <option value="">Espacio</option>
                     @foreach($espacios as $e)
-                        <option value="{{ $e['idEspacioCurricular'] }}">{{ $e['nombre_espacio'] }}</option>
+                        <option value="{{ $e['idespaciocurricular'] }}">{{ $e['nombre_espacio'] }}</option>
                     @endforeach
                 </select>
                 @error('nuevo.espacio_id')

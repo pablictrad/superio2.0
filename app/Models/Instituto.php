@@ -10,7 +10,7 @@ class Instituto extends Model
     protected $primaryKey = 'id';
     protected $fillable = ['nombre',
      'zona_id',
-    'idLocalidad',
+    'idlocalidad',
     'cue_instsup',
     'habilitado'
     ];

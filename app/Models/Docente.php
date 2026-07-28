@@ -43,4 +43,13 @@ class Docente extends Model
     {
         return $this->apellido . ', ' . $this->nombre;
     }
+    public function domicilioActual()
+    {
+        return $this->belongsTo(Domicilio::class, 'domicilio_id', 'idtb_domicilio');
+    }
+
+    public function domicilios(): HasMany
+    {
+        return $this->hasMany(Domicilio::class, 'docente_id');
+    }
 }

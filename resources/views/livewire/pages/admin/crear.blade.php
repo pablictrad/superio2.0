@@ -168,7 +168,7 @@ new class extends Component {
 
         if ($value) {
             $this->espacios = DB::table('nuevo_rel_carrera_espacio')
-                ->join('tb_espacioscurriculares', 'nuevo_rel_carrera_espacio.espacio_id', '=', 'tb_espacioscurriculares.idEspacioCurricular')
+                ->join('tb_espacioscurriculares', 'nuevo_rel_carrera_espacio.espacio_id', '=', 'tb_espacioscurriculares.idespaciocurricular')
                 ->where('nuevo_rel_carrera_espacio.carrera_id', $value)
                 ->select('nuevo_rel_carrera_espacio.id', 'tb_espacioscurriculares.nombre_espacio')
                 ->get()->toArray();
@@ -288,7 +288,7 @@ new class extends Component {
             ]);
 
             $rel = DB::table('nuevo_rel_carrera_espacio')
-                ->join('tb_espacioscurriculares', 'nuevo_rel_carrera_espacio.espacio_id', '=', 'tb_espacioscurriculares.idEspacioCurricular')
+                ->join('tb_espacioscurriculares', 'nuevo_rel_carrera_espacio.espacio_id', '=', 'tb_espacioscurriculares.idespaciocurricular')
                 ->leftJoin('tb_periodo_cursado',  'nuevo_rel_carrera_espacio.periodo_id', '=', 'tb_periodo_cursado.idtb_periodo_cursado')
                 ->leftJoin('tb_turnos',           'nuevo_rel_carrera_espacio.turno_id',   '=', 'tb_turnos.id')
                 ->leftJoin('tb_perfil',           'nuevo_rel_carrera_espacio.perfil_id',  '=', 'tb_perfil.idtb_perfil')
@@ -393,7 +393,7 @@ new class extends Component {
                 ->get()->toArray();
             $this->carrera_id = $det['carrera_id'];
             $this->espacios = DB::table('nuevo_rel_carrera_espacio')
-                ->join('tb_espacioscurriculares', 'nuevo_rel_carrera_espacio.espacio_id', '=', 'tb_espacioscurriculares.idEspacioCurricular')
+                ->join('tb_espacioscurriculares', 'nuevo_rel_carrera_espacio.espacio_id', '=', 'tb_espacioscurriculares.idespaciocurricular')
                 ->where('nuevo_rel_carrera_espacio.carrera_id', $det['carrera_id'])
                 ->select('nuevo_rel_carrera_espacio.id', 'tb_espacioscurriculares.nombre_espacio')
                 ->get()->toArray();
@@ -526,7 +526,7 @@ new class extends Component {
         // Cargar espacios
         $espacios = DB::table('nuevo_espacios_por_llamado')
             ->join('nuevo_rel_carrera_espacio', 'nuevo_espacios_por_llamado.nuevo_rel_carrera_espacio_id', '=', 'nuevo_rel_carrera_espacio.id')
-            ->join('tb_espacioscurriculares',   'nuevo_rel_carrera_espacio.espacio_id',  '=', 'tb_espacioscurriculares.idEspacioCurricular')
+            ->join('tb_espacioscurriculares',   'nuevo_rel_carrera_espacio.espacio_id',  '=', 'tb_espacioscurriculares.idespaciocurricular')
             ->join('tb_carreras',               'nuevo_rel_carrera_espacio.carrera_id',  '=', 'tb_carreras.id')
             ->leftJoin('tb_periodo_cursado',    'nuevo_rel_carrera_espacio.periodo_id',  '=', 'tb_periodo_cursado.idtb_periodo_cursado')
             ->leftJoin('tb_turnos',             'nuevo_rel_carrera_espacio.turno_id',    '=', 'tb_turnos.id')
@@ -720,7 +720,7 @@ new class extends Component {
  
         $espaciosPorLlamado = DB::table('nuevo_espacios_por_llamado')
             ->join('nuevo_rel_carrera_espacio',  'nuevo_espacios_por_llamado.nuevo_rel_carrera_espacio_id', '=', 'nuevo_rel_carrera_espacio.id')
-            ->join('tb_espacioscurriculares',    'nuevo_rel_carrera_espacio.espacio_id',  '=', 'tb_espacioscurriculares.idEspacioCurricular')
+            ->join('tb_espacioscurriculares',    'nuevo_rel_carrera_espacio.espacio_id',  '=', 'tb_espacioscurriculares.idespaciocurricular')
             ->join('tb_carreras',                'nuevo_rel_carrera_espacio.carrera_id',  '=', 'tb_carreras.id')
             ->join('tb_periodo_cursado',         'nuevo_rel_carrera_espacio.periodo_id',  '=', 'tb_periodo_cursado.idtb_periodo_cursado')
             ->join('tb_turnos',                  'nuevo_rel_carrera_espacio.turno_id',    '=', 'tb_turnos.id')
