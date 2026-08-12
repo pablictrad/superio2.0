@@ -135,12 +135,11 @@ new #[Title('Relación Carrera - Espacio')] class extends Component
         return [
             'key'          => (string) Str::uuid(),
             'espacio_id'   => '',
-            'buscar'       => '',
             'anio'         => '',
             'hora_catedra' => '',
             'periodo_id'   => '',
             'turno_id'     => '',
-            'perfil_id'    => '',          
+            'perfil_id'    => '',
         ];
     }
 
@@ -160,36 +159,18 @@ new #[Title('Relación Carrera - Espacio')] class extends Component
             $this->newEspacios,
             fn($row) => $row['key'] !== $key
         ));
-    }   
-    #[Computed(cache: false)]
-    public function espaciosNuevoFiltrados($index)
-    {
-        $buscar = $this->newEspacios[$index]['buscar'] ?? '';
-
-        $seleccionados = collect($this->newEspacios)
-            ->pluck('espacio_id')
-            ->filter()
-            ->values()
-            ->toArray();
-
-        return array_values(array_filter($this->espacios, function ($e) use ($buscar, $seleccionados, $index) {
-
-            if ($buscar && !str_contains(
-                strtolower($e['nombre_espacio']),
-                strtolower($buscar)
-            )) {
-                return false;
-            }
-
-            // No mostrar en otras filas un espacio ya seleccionado
-            $seleccionadoEnOtraFila = collect($this->newEspacios)
-                ->except($index)
-                ->pluck('espacio_id')
-                ->contains($e['idespaciocurricular']);
-
-            return !$seleccionadoEnOtraFila;
-        }));
     }
+
+    #[Computed(cache: false)]
+    public function espaciosNuevoFiltrados()
+    {
+        if (!$this->buscarEspacioNuevo) return $this->espacios;
+
+        return array_values(array_filter($this->espacios, fn($e) =>
+            str_contains(strtolower($e['nombre_espacio']), strtolower($this->buscarEspacioNuevo))
+        ));
+    }
+
     #[Computed(cache: false)]
     public function espaciosEditFiltrados()
     {

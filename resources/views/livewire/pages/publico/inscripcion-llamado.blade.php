@@ -81,6 +81,7 @@ new class extends Component {
 
     // Domicilio ya cargado: se muestra bloqueado salvo que se solicite cambio de zona
     public bool $domicilioExistente    = false;
+    public bool $domicilioAprobado     = false; // solo si tipoestado_id === 2 (Aprobado)
     public bool $solicitandoCambioZona = false;
     public ?int $domicilioIdOriginal   = null;
 
@@ -101,6 +102,7 @@ new class extends Component {
     public array  $certPendientes        = [];
     public string $nuevoCertNombre       = '';
     public string $nuevoCertTipo         = '';
+    public string $nuevoCertAnio         = '';
     public $nuevoCertArchivo             = null;
     public string $errorCert             = '';
 
@@ -190,6 +192,7 @@ new class extends Component {
             if ($domicilio) {
                 $this->cargarDatosDomicilio($domicilio);
                 $this->domicilioExistente  = true;
+                $this->domicilioAprobado   = ((int) ($domicilio->tipoestado_id ?? 0)) === 2;
                 $this->domicilioIdOriginal = $domicilio->idtb_domicilio;
                 $this->actualizarZonaDocente();
             }
@@ -211,16 +214,29 @@ new class extends Component {
         }
 
         $this->paso = 2;
+        $this->dispatch('paso-cambiado');
     }
 
     /* ═══════════════════════════════════════════════════════════════
        PASO 2 → 3 — VALIDAR DATOS PERSONALES
     ═══════════════════════════════════════════════════════════════ */
+    public function updatedArchivoF2(): void
+    {
+        $this->resetValidation('archivoF2');
+    }
+
+    public function updatedArchivoDni(): void
+    {
+        $this->resetValidation('archivoDni');
+    }
+
     public function irPaso3(): void
     {
         $this->mensajeErr = '';
 
-        $editaDomicilio = !$this->domicilioExistente || $this->solicitandoCambioZona;
+        // Solo se considera "ya presentado" si el domicilio existe Y está aprobado.
+        // Si está pendiente o rechazado, se le vuelve a pedir.
+        $editaDomicilio = !($this->domicilioExistente && $this->domicilioAprobado) || $this->solicitandoCambioZona;
 
         $reglasBase = [
             'apellido'  => 'required|min:2|max:100',
@@ -229,7 +245,7 @@ new class extends Component {
             'telefono'  => 'nullable|max:30',
             'email'     => 'nullable|email|max:150',
             'archivoF2' => 'required|file|mimes:pdf|max:5120',
-            'archivoDni' => $this->dniPathExistente
+            'archivoDni' => ($this->dniPathExistente && $this->domicilioAprobado)
                 ? 'nullable|file|mimes:pdf,jpg,jpeg,png|max:10240'
                 : 'required|file|mimes:pdf,jpg,jpeg,png|max:10240',
         ];
@@ -276,7 +292,7 @@ new class extends Component {
         // Bloqueo total por zona
         $this->actualizarZonaDocente();
         if (!$this->zonaValida) {
-            if ($this->domicilioExistente && !$this->solicitandoCambioZona) {
+            if ($this->domicilioExistente && $this->domicilioAprobado && !$this->solicitandoCambioZona) {
                 $this->mensajeErr = 'Su domicilio registrado pertenece a una zona distinta a la de este llamado. Si se mudó, use el botón "Solicitar cambio de zona".';
             } else {
                 $this->mensajeErr = 'No puede inscribirse: su localidad pertenece a una zona distinta a la de este llamado.';
@@ -285,6 +301,7 @@ new class extends Component {
         }
 
         $this->paso = 3;
+        $this->dispatch('paso-cambiado');
     }
 
     /* ═══════════════════════════════════════════════════════════════
@@ -411,17 +428,32 @@ new class extends Component {
     /* ═══════════════════════════════════════════════════════════════
        PASO 3 — AGREGAR TÍTULO
     ═══════════════════════════════════════════════════════════════ */
+    public function updatedNuevoTituloArchivo(): void
+    {
+        $this->resetValidation('nuevoTituloArchivo');
+    }
+
     public function agregarTitulo(): void
     {
         $this->errorTitulo = '';
 
+        // El archivo es obligatorio únicamente si todavía no cargó ningún título
+        // (ni registrado en el sistema, ni pendiente en esta misma sesión).
+        $esPrimerTitulo = empty($this->titulosExistentes) && empty($this->titulosPendientes);
+
         $this->validate([
             'nuevoTituloNombre'      => 'required|min:3|max:200',
             'nuevoTituloInstitucion' => 'nullable|max:200',
-            'nuevoTituloAnio'        => 'nullable|digits:4|integer|min:1950|max:' . date('Y'),
-            'nuevoTituloArchivo'     => 'nullable|file|mimes:pdf,jpg,jpeg,png|max:10240',
+            'nuevoTituloAnio'        => 'required|digits:4|integer|min:1950|max:' . date('Y'),
+            'nuevoTituloArchivo'     => $esPrimerTitulo
+                ? 'required|file|mimes:pdf,jpg,jpeg,png|max:10240'
+                : 'nullable|file|mimes:pdf,jpg,jpeg,png|max:10240',
         ], [
             'nuevoTituloNombre.required' => 'Ingrese el nombre del título.',
+            'nuevoTituloAnio.required'   => 'El año de egreso es obligatorio.',
+            'nuevoTituloAnio.digits'     => 'El año debe tener 4 dígitos.',
+            'nuevoTituloAnio.max'        => 'El año no puede ser posterior al actual.',
+            'nuevoTituloArchivo.required' => 'Debe adjuntar el archivo: es su primer título registrado.',
             'nuevoTituloArchivo.mimes'   => 'El archivo debe ser PDF, JPG o PNG.',
             'nuevoTituloArchivo.max'     => 'El archivo no puede superar 10MB.',
         ]);
@@ -474,18 +506,35 @@ new class extends Component {
     /* ═══════════════════════════════════════════════════════════════
        PASO 3 — AGREGAR CERTIFICADO
     ═══════════════════════════════════════════════════════════════ */
+    /* ── Limpieza en vivo de errores al corregir cada campo ────────── */
+    public function updatedNuevoCertArchivo(): void
+    {
+        $this->resetValidation('nuevoCertArchivo');
+    }
+
+    public function updatedNuevoCertTipo(): void
+    {
+        $this->resetValidation('nuevoCertTipo');
+    }
+
     public function agregarCert(): void
     {
         $this->errorCert = '';
 
         $this->validate([
             'nuevoCertNombre'  => 'required|min:3|max:200',
-            'nuevoCertTipo'    => 'nullable|max:50',
-            'nuevoCertArchivo' => 'nullable|file|mimes:pdf,jpg,jpeg,png|max:10240',
+            'nuevoCertTipo'    => 'required|max:50',
+            'nuevoCertAnio'    => 'required|digits:4|integer|min:1950|max:' . date('Y'),
+            'nuevoCertArchivo' => 'required|file|mimes:pdf,jpg,jpeg,png|max:10240',
         ], [
-            'nuevoCertNombre.required' => 'Ingrese el nombre del certificado.',
-            'nuevoCertArchivo.mimes'   => 'El archivo debe ser PDF, JPG o PNG.',
-            'nuevoCertArchivo.max'     => 'El archivo no puede superar 10MB.',
+            'nuevoCertNombre.required'  => 'Ingrese el nombre del certificado.',
+            'nuevoCertTipo.required'    => 'Seleccione una categoría.',
+            'nuevoCertAnio.required'    => 'El año es obligatorio.',
+            'nuevoCertAnio.digits'      => 'El año debe tener 4 dígitos.',
+            'nuevoCertAnio.max'         => 'El año no puede ser posterior al actual.',
+            'nuevoCertArchivo.required' => 'Debe adjuntar el archivo del certificado.',
+            'nuevoCertArchivo.mimes'    => 'El archivo debe ser PDF, JPG o PNG.',
+            'nuevoCertArchivo.max'      => 'El archivo no puede superar 10MB.',
         ]);
 
         $nombreNorm = mb_strtoupper(trim($this->nuevoCertNombre));
@@ -511,12 +560,15 @@ new class extends Component {
         $this->certPendientes[] = [
             'nombre_certificado'      => $nombreNorm,
             'tipo'                    => $this->nuevoCertTipo ?: null,
+            // AJUSTAR: confirmar el nombre de la columna en tb_docente_certificados (se asume "anio").
+            'anio'                    => $this->nuevoCertAnio ?: null,
             'archivo_path'            => $archivoPath,
             'archivo_nombre_original' => $archivoNombre,
         ];
 
         $this->nuevoCertNombre  = '';
         $this->nuevoCertTipo    = '';
+        $this->nuevoCertAnio    = '';
         $this->nuevoCertArchivo = null;
     }
 
@@ -556,6 +608,13 @@ new class extends Component {
 
         if ($yaInscripto) {
             $this->mensajeErr = 'Ya existe una inscripción con ese DNI para este llamado.';
+            return;
+        }
+
+        // Título obligatorio: al menos uno, ya sea registrado previamente o cargado en esta sesión.
+        // Certificados siguen siendo opcionales.
+        if (empty($this->titulosExistentes) && empty($this->titulosPendientes)) {
+            $this->mensajeErr = 'Debe cargar al menos un título para poder inscribirse.';
             return;
         }
 
@@ -615,6 +674,8 @@ new class extends Component {
                         'docente_id'              => $docenteId,
                         'nombre_certificado'      => $cert['nombre_certificado'],
                         'tipo'                    => $cert['tipo'],
+                        // AJUSTAR: mismo nombre de columna que en agregarCert().
+                        'anio'                    => $cert['anio'],
                         'archivo_path'            => $cert['archivo_path'],
                         'archivo_nombre_original' => $cert['archivo_nombre_original'],
                         'created_at'              => now(),
@@ -648,8 +709,8 @@ new class extends Component {
             // 4.2 Domicilio: reutilizar vigente, crear nuevo, o versionar por cambio de zona
             $domicilioIdVigente = DB::table('tb_docentes')->where('id', $docenteId)->value('domicilio_id');
 
-            if ($this->domicilioExistente && !$this->solicitandoCambioZona) {
-                // Domicilio ya cargado y sin cambios: no se toca tb_domicilio
+            if ($this->domicilioExistente && $this->domicilioAprobado && !$this->solicitandoCambioZona) {
+                // Domicilio ya cargado y aprobado: no se toca tb_domicilio
                 $domicilioId = $domicilioIdVigente;
             } else {
                 $datosDomicilio = [
@@ -718,6 +779,7 @@ new class extends Component {
         });
 
         $this->paso = 4;
+        $this->dispatch('paso-cambiado');
     }
 
     /* ═══════════════════════════════════════════════════════════════
@@ -733,6 +795,7 @@ new class extends Component {
     {
         if ($p < $this->paso && $this->paso < 4) {
             $this->paso = $p;
+            $this->dispatch('paso-cambiado');
         }
     }
 
@@ -748,12 +811,12 @@ new class extends Component {
             'archivoFactura','facturaPathExistente',
             'archivoCertifDomicilio','certifDomicilioPathExistente',
             'localidadId','zonaDocente','zonaTexto','zonaValida',
-            'domicilioExistente','solicitandoCambioZona','domicilioIdOriginal',
+            'domicilioExistente','domicilioAprobado','solicitandoCambioZona','domicilioIdOriginal',
             'titulosExistentes','titulosPendientes',
             'nuevoTituloNombre','nuevoTituloInstitucion','nuevoTituloAnio','nuevoTituloArchivo',
             'errorTitulo',
             'certExistentes','certPendientes',
-            'nuevoCertNombre','nuevoCertTipo','nuevoCertArchivo','errorCert',
+            'nuevoCertNombre','nuevoCertTipo','nuevoCertAnio','nuevoCertArchivo','errorCert',
             'codigoConstancia','mensajeErr',
         ]);
         $this->paso = 1;
@@ -827,7 +890,7 @@ new class extends Component {
         @endif
 
         {{-- ══ BODY ═════════════════════════════════════════════════════ --}}
-        <div class="overflow-y-auto flex-1 px-6 py-5">
+        <div class="overflow-y-auto flex-1 px-6 py-5" x-on:paso-cambiado.window="$el.scrollTop = 0">
 
            
 
@@ -931,7 +994,7 @@ new class extends Component {
             </div>
             @endif
 
-            @php $editaDomicilio = !$domicilioExistente || $solicitandoCambioZona; @endphp
+            @php $editaDomicilio = !($domicilioExistente && $domicilioAprobado) || $solicitandoCambioZona; @endphp
 
             <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
 
@@ -940,7 +1003,7 @@ new class extends Component {
                     <label class="block text-xs font-black text-gray-600 mb-1 uppercase tracking-wide">
                         Apellido <span class="text-red-500">*</span>
                     </label>
-                    <input wire:model="apellido" type="text" placeholder="García López"
+                    <input wire:model="apellido" type="text" placeholder="Ingrese su apellido"
                         class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-400 focus:border-indigo-400 transition
                                @error('apellido') border-red-400 bg-red-50 @enderror">
                     @error('apellido') <p class="mt-1 text-xs text-red-600 font-medium">{{ $message }}</p> @enderror
@@ -951,7 +1014,7 @@ new class extends Component {
                     <label class="block text-xs font-black text-gray-600 mb-1 uppercase tracking-wide">
                         Nombre/s <span class="text-red-500">*</span>
                     </label>
-                    <input wire:model="nombre" type="text" placeholder="María Inés"
+                    <input wire:model="nombre" type="text" placeholder="Ingrese su nombre completo"
                         class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-400 focus:border-indigo-400 transition
                                @error('nombre') border-red-400 bg-red-50 @enderror">
                     @error('nombre') <p class="mt-1 text-xs text-red-600 font-medium">{{ $message }}</p> @enderror
@@ -997,9 +1060,13 @@ new class extends Component {
                     <label class="block text-xs font-black text-gray-600 uppercase tracking-wide">
                         Domicilio y Localidad
                     </label>
-                    @if($domicilioExistente && !$solicitandoCambioZona)
+                    @if($domicilioExistente && $domicilioAprobado && !$solicitandoCambioZona)
                         <span class="text-[10px] font-black uppercase text-gray-400 bg-gray-100 px-2 py-0.5 rounded-full">
                             🔒 Registrado
+                        </span>
+                    @elseif($domicilioExistente && !$domicilioAprobado && !$solicitandoCambioZona)
+                        <span class="text-[10px] font-black uppercase text-amber-600 bg-amber-50 px-2 py-0.5 rounded-full">
+                            Pendiente de aprobación — puede corregirlo
                         </span>
                     @elseif($solicitandoCambioZona)
                         <span class="text-[10px] font-black uppercase text-amber-600 bg-amber-50 px-2 py-0.5 rounded-full">
@@ -1008,7 +1075,7 @@ new class extends Component {
                     @endif
                 </div>
 
-                @if($domicilioExistente && !$solicitandoCambioZona)
+                @if($domicilioExistente && $domicilioAprobado && !$solicitandoCambioZona)
                     {{-- MODO BLOQUEADO: domicilio ya cargado, solo lectura --}}
                     <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 text-sm">
                         <div class="sm:col-span-3">
@@ -1260,119 +1327,161 @@ new class extends Component {
                     @endif
                 </div>
 
-                {{-- Títulos existentes en BD --}}
-                @if(count($titulosExistentes) > 0)
-                <div class="mb-3">
-                    <p class="text-[10px] font-black text-gray-400 uppercase mb-1.5">Ya registrados en el sistema</p>
-                    @foreach($titulosExistentes as $tit)
-                    @php $tit = (object)$tit; @endphp
-                    <div class="flex items-center gap-2 p-2.5 bg-gray-50 border border-gray-200 rounded-lg mb-1.5">
-                        <svg class="w-4 h-4 text-green-500 shrink-0" fill="currentColor" viewBox="0 0 20 20">
-                            <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"/>
-                        </svg>
-                        <div class="flex-1 min-w-0">
-                            <p class="text-xs font-bold text-gray-800 truncate">{{ $tit->nombre_titulo }}</p>
-                            @if($tit->institucion)
-                            <p class="text-[10px] text-gray-500">{{ $tit->institucion }} @if($tit->anio_egreso) · {{ $tit->anio_egreso }} @endif</p>
-                            @endif
-                        </div>
-                        @if($tit->archivo_path)
-                        <a href="{{ Storage::url($tit->archivo_path) }}" target="_blank"
-                            class="text-indigo-500 hover:text-indigo-700 transition shrink-0" title="Ver archivo">
-                            <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
-                                <path fill-rule="evenodd" d="M4 4a2 2 0 012-2h4.586A2 2 0 0112 2.586L15.414 6A2 2 0 0116 7.414V16a2 2 0 01-2 2H6a2 2 0 01-2-2V4z" clip-rule="evenodd"/>
-                            </svg>
-                        </a>
-                        @endif
-                    </div>
-                    @endforeach
+                @if(count($titulosExistentes) === 0 && count($titulosPendientes) === 0)
+                <div class="mb-3 p-2.5 bg-red-50 border border-red-200 rounded-lg text-xs text-red-700 font-semibold flex items-center gap-2">
+                    <svg class="w-4 h-4 shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                        <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clip-rule="evenodd"/>
+                    </svg>
+                    Debe cargar al menos un título para poder inscribirse. Es obligatorio la primera vez.
                 </div>
                 @endif
 
-                {{-- Títulos pendientes (sesión actual) --}}
-                @if(count($titulosPendientes) > 0)
-                <div class="mb-3">
-                    <p class="text-[10px] font-black text-amber-600 uppercase mb-1.5">A agregar en esta inscripción</p>
-                    @foreach($titulosPendientes as $i => $tit)
-                    <div class="flex items-center gap-2 p-2.5 bg-amber-50 border border-amber-200 rounded-lg mb-1.5">
-                        <svg class="w-4 h-4 text-amber-500 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v3m0 0v3m0-3h3m-3 0H9"/>
-                        </svg>
-                        <div class="flex-1 min-w-0">
-                            <p class="text-xs font-bold text-gray-800 truncate">{{ $tit['nombre_titulo'] }}</p>
-                            @if($tit['institucion'])
-                            <p class="text-[10px] text-gray-500">{{ $tit['institucion'] }} @if($tit['anio_egreso']) · {{ $tit['anio_egreso'] }} @endif</p>
+                <div class="grid grid-cols-1 lg:grid-cols-5 gap-4">
+                    {{-- Formulario nuevo título (izquierda) --}}
+                    <div class="lg:col-span-3 lg:order-1">
+                        <div class="bg-slate-50 border border-slate-200 rounded-xl p-4" x-data="{ archivoPendiente: false }">
+                            <p class="text-[10px] font-black text-slate-500 uppercase mb-3">Agregar título</p>
+
+                            @if($errorTitulo)
+                            <div class="mb-3 p-2.5 bg-red-50 border border-red-200 rounded-lg text-xs text-red-700 font-semibold flex items-center gap-2">
+                                <svg class="w-4 h-4 shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                                    <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clip-rule="evenodd"/>
+                                </svg>
+                                {{ $errorTitulo }}
+                            </div>
+                            @endif
+
+                            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                <div class="sm:col-span-2">
+                                    <label class="block text-[10px] font-black text-gray-500 mb-1 uppercase">
+                                        Nombre del título <span class="text-red-500">*</span>
+                                    </label>
+                                    <input wire:model="nuevoTituloNombre" type="text"
+                                        placeholder="Ej: Profesor de Matemática, Lic. en Ciencias de la Educación"
+                                        class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-400 focus:border-indigo-400 transition
+                                               @error('nuevoTituloNombre') border-red-400 bg-red-50 @enderror">
+                                    <p class="text-[9px] text-gray-400 mt-0.5">Escríbalo exactamente como figura en el título. Se usará para evitar duplicados.</p>
+                                    @error('nuevoTituloNombre') <p class="mt-1 text-xs text-red-600 font-medium">{{ $message }}</p> @enderror
+                                </div>
+                                <div class="sm:col-span-2">
+                                    <label class="block text-[10px] font-black text-gray-500 mb-1 uppercase">Institución</label>
+                                    <input wire:model="nuevoTituloInstitucion" type="text" placeholder="Ej: UNLaR"
+                                        class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-400 focus:border-indigo-400 transition">
+                                </div>
+                                <div class="sm:col-span-2">
+                                    <label class="block text-[10px] font-black text-gray-500 mb-1 uppercase">
+                                        Año de egreso <span class="text-red-500">*</span>
+                                    </label>
+                                    <input wire:model="nuevoTituloAnio" type="number" min="1950" max="{{ date('Y') }}" placeholder="{{ date('Y') }}"
+                                        class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-400 focus:border-indigo-400 transition
+                                               @error('nuevoTituloAnio') border-red-400 bg-red-50 @enderror">
+                                    @error('nuevoTituloAnio') <p class="mt-1 text-xs text-red-600 font-medium">{{ $message }}</p> @enderror
+                                </div>
+                                <div class="sm:col-span-2">
+                                    <label class="block text-[10px] font-black text-gray-500 mb-1 uppercase">
+                                        Adjuntar copia del título (PDF, JPG, PNG — máx. 10MB)
+                                        @if(count($titulosExistentes) === 0 && count($titulosPendientes) === 0)
+                                            <span class="text-red-500">*</span>
+                                        @else
+                                            <span class="text-gray-400 normal-case font-normal">(opcional)</span>
+                                        @endif
+                                    </label>
+                                    <input type="file" wire:model="nuevoTituloArchivo" accept=".pdf,.jpg,.jpeg,.png"
+                                        x-on:change="archivoPendiente = $event.target.files.length > 0"
+                                        class="w-full border border-gray-300 rounded-lg text-xs p-2 bg-white shadow-sm
+                                               @error('nuevoTituloArchivo') border-red-400 bg-red-50 @enderror">
+                                    <div wire:loading wire:target="nuevoTituloArchivo" class="text-xs text-indigo-500 mt-1">Subiendo archivo...</div>
+                                    @error('nuevoTituloArchivo') <p class="mt-1 text-xs text-red-600 font-medium">{{ $message }}</p> @enderror
+
+                                    <div x-show="archivoPendiente" x-cloak
+                                        class="mt-2 p-2 bg-amber-50 border border-amber-300 rounded-lg text-[11px] text-amber-800 font-semibold flex items-center gap-1.5">
+                                        <svg class="w-3.5 h-3.5 shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                                            <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clip-rule="evenodd"/>
+                                        </svg>
+                                        Seleccionaste un archivo pero todavía no lo agregaste. Hacé clic en "Agregar título" para guardarlo.
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="flex justify-end mt-3">
+                                <button wire:click="agregarTitulo"
+                                    x-on:click="archivoPendiente = false"
+                                    wire:loading.attr="disabled"
+                                    wire:target="agregarTitulo,nuevoTituloArchivo"
+                                    class="bg-indigo-600 hover:bg-indigo-700 text-white font-black px-5 py-2 rounded-lg text-xs uppercase shadow-sm transition disabled:opacity-50 flex items-center gap-1.5">
+                                    <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M12 4v16m8-8H4"/>
+                                    </svg>
+                                    Agregar título
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
+                    {{-- Documentos ya agregados (derecha, visibles sin scrollear) --}}
+                    <div class="lg:col-span-2 lg:order-2">
+                        <div class="lg:sticky lg:top-0 space-y-3">
+                            {{-- Títulos existentes en BD --}}
+                            @if(count($titulosExistentes) > 0)
+                            <div>
+                                <p class="text-[10px] font-black text-gray-400 uppercase mb-1.5">Ya registrados en el sistema</p>
+                                @foreach($titulosExistentes as $tit)
+                                @php $tit = (object)$tit; @endphp
+                                <div class="flex items-center gap-2 p-2.5 bg-gray-50 border border-gray-200 rounded-lg mb-1.5">
+                                    <svg class="w-4 h-4 text-green-500 shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                                        <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"/>
+                                    </svg>
+                                    <div class="flex-1 min-w-0">
+                                        <p class="text-xs font-bold text-gray-800 truncate">{{ $tit->nombre_titulo }}</p>
+                                        @if($tit->institucion)
+                                        <p class="text-[10px] text-gray-500">{{ $tit->institucion }} @if($tit->anio_egreso) · {{ $tit->anio_egreso }} @endif</p>
+                                        @endif
+                                    </div>
+                                    @if($tit->archivo_path)
+                                    <a href="{{ Storage::url($tit->archivo_path) }}" target="_blank"
+                                        class="text-indigo-500 hover:text-indigo-700 transition shrink-0" title="Ver archivo">
+                                        <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                                            <path fill-rule="evenodd" d="M4 4a2 2 0 012-2h4.586A2 2 0 0112 2.586L15.414 6A2 2 0 0116 7.414V16a2 2 0 01-2 2H6a2 2 0 01-2-2V4z" clip-rule="evenodd"/>
+                                        </svg>
+                                    </a>
+                                    @endif
+                                </div>
+                                @endforeach
+                            </div>
+                            @endif
+
+                            {{-- Títulos pendientes (sesión actual) --}}
+                            @if(count($titulosPendientes) > 0)
+                            <div>
+                                <p class="text-[10px] font-black text-amber-600 uppercase mb-1.5">A agregar en esta inscripción</p>
+                                @foreach($titulosPendientes as $i => $tit)
+                                <div class="flex items-center gap-2 p-2.5 bg-amber-50 border border-amber-200 rounded-lg mb-1.5">
+                                    <svg class="w-4 h-4 text-amber-500 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v3m0 0v3m0-3h3m-3 0H9"/>
+                                    </svg>
+                                    <div class="flex-1 min-w-0">
+                                        <p class="text-xs font-bold text-gray-800 truncate">{{ $tit['nombre_titulo'] }}</p>
+                                        @if($tit['institucion'])
+                                        <p class="text-[10px] text-gray-500">{{ $tit['institucion'] }} @if($tit['anio_egreso']) · {{ $tit['anio_egreso'] }} @endif</p>
+                                        @endif
+                                    </div>
+                                    <button wire:click="quitarTituloPendiente({{ $i }})"
+                                        class="text-red-400 hover:text-red-600 transition shrink-0">
+                                        <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                                            <path fill-rule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clip-rule="evenodd"/>
+                                        </svg>
+                                    </button>
+                                </div>
+                                @endforeach
+                            </div>
+                            @endif
+
+                            @if(count($titulosExistentes) === 0 && count($titulosPendientes) === 0)
+                            <div class="p-4 border border-dashed border-gray-200 rounded-lg text-center">
+                                <p class="text-[11px] text-gray-400">Los títulos que agregues van a aparecer acá.</p>
+                            </div>
                             @endif
                         </div>
-                        <button wire:click="quitarTituloPendiente({{ $i }})"
-                            class="text-red-400 hover:text-red-600 transition shrink-0">
-                            <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
-                                <path fill-rule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clip-rule="evenodd"/>
-                            </svg>
-                        </button>
-                    </div>
-                    @endforeach
-                </div>
-                @endif
-
-                {{-- Formulario nuevo título --}}
-                <div class="bg-slate-50 border border-slate-200 rounded-xl p-4">
-                    <p class="text-[10px] font-black text-slate-500 uppercase mb-3">Agregar título</p>
-
-                    @if($errorTitulo)
-                    <div class="mb-3 p-2.5 bg-red-50 border border-red-200 rounded-lg text-xs text-red-700 font-semibold flex items-center gap-2">
-                        <svg class="w-4 h-4 shrink-0" fill="currentColor" viewBox="0 0 20 20">
-                            <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clip-rule="evenodd"/>
-                        </svg>
-                        {{ $errorTitulo }}
-                    </div>
-                    @endif
-
-                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                        <div class="sm:col-span-2">
-                            <label class="block text-[10px] font-black text-gray-500 mb-1 uppercase">
-                                Nombre del título <span class="text-red-500">*</span>
-                            </label>
-                            <input wire:model="nuevoTituloNombre" type="text"
-                                placeholder="Ej: Profesor de Matemática, Lic. en Ciencias de la Educación"
-                                class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-400 focus:border-indigo-400 transition
-                                       @error('nuevoTituloNombre') border-red-400 bg-red-50 @enderror">
-                            <p class="text-[9px] text-gray-400 mt-0.5">Escríbalo exactamente como figura en el título. Se usará para evitar duplicados.</p>
-                            @error('nuevoTituloNombre') <p class="mt-1 text-xs text-red-600 font-medium">{{ $message }}</p> @enderror
-                        </div>
-                        <div>
-                            <label class="block text-[10px] font-black text-gray-500 mb-1 uppercase">Institución</label>
-                            <input wire:model="nuevoTituloInstitucion" type="text" placeholder="Ej: UNLaR"
-                                class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-400 focus:border-indigo-400 transition">
-                        </div>
-                        <div>
-                            <label class="block text-[10px] font-black text-gray-500 mb-1 uppercase">Año de egreso</label>
-                            <input wire:model="nuevoTituloAnio" type="number" min="1950" max="{{ date('Y') }}" placeholder="{{ date('Y') }}"
-                                class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-400 focus:border-indigo-400 transition
-                                       @error('nuevoTituloAnio') border-red-400 bg-red-50 @enderror">
-                            @error('nuevoTituloAnio') <p class="mt-1 text-xs text-red-600 font-medium">{{ $message }}</p> @enderror
-                        </div>
-                        <div class="sm:col-span-2">
-                            <label class="block text-[10px] font-black text-gray-500 mb-1 uppercase">
-                                Adjuntar copia del título (PDF, JPG, PNG — máx. 10MB)
-                            </label>
-                            <input type="file" wire:model="nuevoTituloArchivo" accept=".pdf,.jpg,.jpeg,.png"
-                                class="w-full border border-gray-300 rounded-lg text-xs p-2 bg-white shadow-sm">
-                            <div wire:loading wire:target="nuevoTituloArchivo" class="text-xs text-indigo-500 mt-1">Subiendo archivo...</div>
-                            @error('nuevoTituloArchivo') <p class="mt-1 text-xs text-red-600 font-medium">{{ $message }}</p> @enderror
-                        </div>
-                    </div>
-
-                    <div class="flex justify-end mt-3">
-                        <button wire:click="agregarTitulo"
-                            wire:loading.attr="disabled"
-                            wire:target="agregarTitulo,nuevoTituloArchivo"
-                            class="bg-indigo-600 hover:bg-indigo-700 text-white font-black px-5 py-2 rounded-lg text-xs uppercase shadow-sm transition disabled:opacity-50 flex items-center gap-1.5">
-                            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M12 4v16m8-8H4"/>
-                            </svg>
-                            Agregar título
-                        </button>
                     </div>
                 </div>
             </div>
@@ -1393,113 +1502,151 @@ new class extends Component {
                     @endif
                 </div>
 
-                {{-- Certs existentes --}}
-                @if(count($certExistentes) > 0)
-                <div class="mb-3">
-                    <p class="text-[10px] font-black text-gray-400 uppercase mb-1.5">Ya registrados en el sistema</p>
-                    @foreach($certExistentes as $cert)
-                    @php $cert = (object)$cert; @endphp
-                    <div class="flex items-center gap-2 p-2.5 bg-gray-50 border border-gray-200 rounded-lg mb-1.5">
-                        <svg class="w-4 h-4 text-teal-500 shrink-0" fill="currentColor" viewBox="0 0 20 20">
-                            <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"/>
-                        </svg>
-                        <div class="flex-1 min-w-0">
-                            <p class="text-xs font-bold text-gray-800 truncate">{{ $cert->nombre_certificado }}</p>
-                            @if($cert->tipo) <p class="text-[10px] text-gray-500">{{ $cert->tipo }}</p> @endif
+                <div class="grid grid-cols-1 lg:grid-cols-5 gap-4">
+                    {{-- Formulario nuevo certificado (izquierda) --}}
+                    <div class="lg:col-span-3 lg:order-1">
+                        <div class="bg-slate-50 border border-slate-200 rounded-xl p-4" x-data="{ archivoPendiente: false }">
+                            <p class="text-[10px] font-black text-slate-500 uppercase mb-3">Agregar certificado</p>
+
+                            @if($errorCert)
+                            <div class="mb-3 p-2.5 bg-red-50 border border-red-200 rounded-lg text-xs text-red-700 font-semibold flex items-center gap-2">
+                                <svg class="w-4 h-4 shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                                    <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clip-rule="evenodd"/>
+                                </svg>
+                                {{ $errorCert }}
+                            </div>
+                            @endif
+
+                            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                <div class="sm:col-span-2">
+                                    <label class="block text-[10px] font-black text-gray-500 mb-1 uppercase">
+                                        Nombre del certificado <span class="text-red-500">*</span>
+                                    </label>
+                                    <input wire:model="nuevoCertNombre" type="text"
+                                        placeholder="Ej: Capacitación en TIC para docentes — MEC 2023"
+                                        class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-teal-400 focus:border-teal-400 transition
+                                               @error('nuevoCertNombre') border-red-400 bg-red-50 @enderror">
+                                    <p class="text-[9px] text-gray-400 mt-0.5">Escríbalo exactamente como figura en el certificado.</p>
+                                    @error('nuevoCertNombre') <p class="mt-1 text-xs text-red-600 font-medium">{{ $message }}</p> @enderror
+                                </div>
+                                <div>
+                                    <label class="block text-[10px] font-black text-gray-500 mb-1 uppercase">
+                                        Tipo (categoría) <span class="text-red-500">*</span>
+                                    </label>
+                                    <select wire:model="nuevoCertTipo"
+                                        class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-teal-400 focus:border-teal-400 transition
+                                               @error('nuevoCertTipo') border-red-400 bg-red-50 @enderror">
+                                        <option value="">Seleccione...</option>
+                                        @foreach($tiposCert as $tipo)
+                                            <option value="{{ $tipo }}">{{ $tipo }}</option>
+                                        @endforeach
+                                    </select>
+                                    @error('nuevoCertTipo') <p class="mt-1 text-xs text-red-600 font-medium">{{ $message }}</p> @enderror
+                                </div>
+                                <div>
+                                    <label class="block text-[10px] font-black text-gray-500 mb-1 uppercase">
+                                        Año <span class="text-red-500">*</span>
+                                    </label>
+                                    <input wire:model="nuevoCertAnio" type="number" min="1950" max="{{ date('Y') }}" placeholder="{{ date('Y') }}"
+                                        class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-teal-400 focus:border-teal-400 transition
+                                               @error('nuevoCertAnio') border-red-400 bg-red-50 @enderror">
+                                    @error('nuevoCertAnio') <p class="mt-1 text-xs text-red-600 font-medium">{{ $message }}</p> @enderror
+                                </div>
+                                <div class="sm:col-span-2">
+                                    <label class="block text-[10px] font-black text-gray-500 mb-1 uppercase">
+                                        Adjuntar (PDF, JPG, PNG — máx. 10MB) <span class="text-red-500">*</span>
+                                    </label>
+                                    <input type="file" wire:model="nuevoCertArchivo" accept=".pdf,.jpg,.jpeg,.png"
+                                        x-on:change="archivoPendiente = $event.target.files.length > 0"
+                                        class="w-full border border-gray-300 rounded-lg text-xs p-2 bg-white shadow-sm">
+                                    <div wire:loading wire:target="nuevoCertArchivo" class="text-xs text-teal-500 mt-1">Subiendo archivo...</div>
+                                    @error('nuevoCertArchivo') <p class="mt-1 text-xs text-red-600 font-medium">{{ $message }}</p> @enderror
+
+                                    <div x-show="archivoPendiente" x-cloak
+                                        class="mt-2 p-2 bg-amber-50 border border-amber-300 rounded-lg text-[11px] text-amber-800 font-semibold flex items-center gap-1.5">
+                                        <svg class="w-3.5 h-3.5 shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                                            <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clip-rule="evenodd"/>
+                                        </svg>
+                                        Seleccionaste un archivo pero todavía no lo agregaste. Hacé clic en "Agregar certificado" para guardarlo.
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="flex justify-end mt-3">
+                                <button wire:click="agregarCert"
+                                    x-on:click="archivoPendiente = false"
+                                    wire:loading.attr="disabled"
+                                    wire:target="agregarCert,nuevoCertArchivo"
+                                    class="bg-teal-600 hover:bg-teal-700 text-white font-black px-5 py-2 rounded-lg text-xs uppercase shadow-sm transition disabled:opacity-50 flex items-center gap-1.5">
+                                    <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M12 4v16m8-8H4"/>
+                                    </svg>
+                                    Agregar certificado
+                                </button>
+                            </div>
                         </div>
-                        @if($cert->archivo_path)
-                        <a href="{{ Storage::url($cert->archivo_path) }}" target="_blank"
-                            class="text-teal-500 hover:text-teal-700 transition shrink-0" title="Ver archivo">
-                            <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
-                                <path fill-rule="evenodd" d="M4 4a2 2 0 012-2h4.586A2 2 0 0112 2.586L15.414 6A2 2 0 0116 7.414V16a2 2 0 01-2 2H6a2 2 0 01-2-2V4z" clip-rule="evenodd"/>
-                            </svg>
-                        </a>
-                        @endif
                     </div>
-                    @endforeach
-                </div>
-                @endif
 
-                {{-- Certs pendientes --}}
-                @if(count($certPendientes) > 0)
-                <div class="mb-3">
-                    <p class="text-[10px] font-black text-amber-600 uppercase mb-1.5">A agregar en esta inscripción</p>
-                    @foreach($certPendientes as $i => $cert)
-                    <div class="flex items-center gap-2 p-2.5 bg-amber-50 border border-amber-200 rounded-lg mb-1.5">
-                        <svg class="w-4 h-4 text-amber-500 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v3m0 0v3m0-3h3m-3 0H9"/>
-                        </svg>
-                        <div class="flex-1 min-w-0">
-                            <p class="text-xs font-bold text-gray-800 truncate">{{ $cert['nombre_certificado'] }}</p>
-                            @if($cert['tipo']) <p class="text-[10px] text-gray-500">{{ $cert['tipo'] }}</p> @endif
-                        </div>
-                        <button wire:click="quitarCertPendiente({{ $i }})"
-                            class="text-red-400 hover:text-red-600 transition shrink-0">
-                            <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
-                                <path fill-rule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clip-rule="evenodd"/>
-                            </svg>
-                        </button>
-                    </div>
-                    @endforeach
-                </div>
-                @endif
-
-                {{-- Formulario nuevo certificado --}}
-                <div class="bg-slate-50 border border-slate-200 rounded-xl p-4">
-                    <p class="text-[10px] font-black text-slate-500 uppercase mb-3">Agregar certificado</p>
-
-                    @if($errorCert)
-                    <div class="mb-3 p-2.5 bg-red-50 border border-red-200 rounded-lg text-xs text-red-700 font-semibold flex items-center gap-2">
-                        <svg class="w-4 h-4 shrink-0" fill="currentColor" viewBox="0 0 20 20">
-                            <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clip-rule="evenodd"/>
-                        </svg>
-                        {{ $errorCert }}
-                    </div>
-                    @endif
-
-                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                        <div class="sm:col-span-2">
-                            <label class="block text-[10px] font-black text-gray-500 mb-1 uppercase">
-                                Nombre del certificado <span class="text-red-500">*</span>
-                            </label>
-                            <input wire:model="nuevoCertNombre" type="text"
-                                placeholder="Ej: Capacitación en TIC para docentes — MEC 2023"
-                                class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-teal-400 focus:border-teal-400 transition
-                                       @error('nuevoCertNombre') border-red-400 bg-red-50 @enderror">
-                            <p class="text-[9px] text-gray-400 mt-0.5">Escríbalo exactamente como figura en el certificado.</p>
-                            @error('nuevoCertNombre') <p class="mt-1 text-xs text-red-600 font-medium">{{ $message }}</p> @enderror
-                        </div>
-                        <div>
-                            <label class="block text-[10px] font-black text-gray-500 mb-1 uppercase">Tipo</label>
-                            <select wire:model="nuevoCertTipo"
-                                class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-teal-400 focus:border-teal-400 transition">
-                                <option value="">Seleccione...</option>
-                                @foreach($tiposCert as $tipo)
-                                    <option value="{{ $tipo }}">{{ $tipo }}</option>
+                    {{-- Documentos ya agregados (derecha, visibles sin scrollear) --}}
+                    <div class="lg:col-span-2 lg:order-2">
+                        <div class="lg:sticky lg:top-0 space-y-3">
+                            {{-- Certs existentes --}}
+                            @if(count($certExistentes) > 0)
+                            <div>
+                                <p class="text-[10px] font-black text-gray-400 uppercase mb-1.5">Ya registrados en el sistema</p>
+                                @foreach($certExistentes as $cert)
+                                @php $cert = (object)$cert; @endphp
+                                <div class="flex items-center gap-2 p-2.5 bg-gray-50 border border-gray-200 rounded-lg mb-1.5">
+                                    <svg class="w-4 h-4 text-teal-500 shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                                        <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"/>
+                                    </svg>
+                                    <div class="flex-1 min-w-0">
+                                        <p class="text-xs font-bold text-gray-800 truncate">{{ $cert->nombre_certificado }}</p>
+                                        @if($cert->tipo || ($cert->anio ?? null)) <p class="text-[10px] text-gray-500">{{ $cert->tipo }} @if($cert->anio ?? null) · {{ $cert->anio }} @endif</p> @endif
+                                    </div>
+                                    @if($cert->archivo_path)
+                                    <a href="{{ Storage::url($cert->archivo_path) }}" target="_blank"
+                                        class="text-teal-500 hover:text-teal-700 transition shrink-0" title="Ver archivo">
+                                        <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                                            <path fill-rule="evenodd" d="M4 4a2 2 0 012-2h4.586A2 2 0 0112 2.586L15.414 6A2 2 0 0116 7.414V16a2 2 0 01-2 2H6a2 2 0 01-2-2V4z" clip-rule="evenodd"/>
+                                        </svg>
+                                    </a>
+                                    @endif
+                                </div>
                                 @endforeach
-                            </select>
-                        </div>
-                        <div>
-                            <label class="block text-[10px] font-black text-gray-500 mb-1 uppercase">
-                                Adjuntar (PDF, JPG, PNG — máx. 10MB)
-                            </label>
-                            <input type="file" wire:model="nuevoCertArchivo" accept=".pdf,.jpg,.jpeg,.png"
-                                class="w-full border border-gray-300 rounded-lg text-xs p-2 bg-white shadow-sm">
-                            <div wire:loading wire:target="nuevoCertArchivo" class="text-xs text-teal-500 mt-1">Subiendo archivo...</div>
-                            @error('nuevoCertArchivo') <p class="mt-1 text-xs text-red-600 font-medium">{{ $message }}</p> @enderror
-                        </div>
-                    </div>
+                            </div>
+                            @endif
 
-                    <div class="flex justify-end mt-3">
-                        <button wire:click="agregarCert"
-                            wire:loading.attr="disabled"
-                            wire:target="agregarCert,nuevoCertArchivo"
-                            class="bg-teal-600 hover:bg-teal-700 text-white font-black px-5 py-2 rounded-lg text-xs uppercase shadow-sm transition disabled:opacity-50 flex items-center gap-1.5">
-                            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M12 4v16m8-8H4"/>
-                            </svg>
-                            Agregar certificado
-                        </button>
+                            {{-- Certs pendientes --}}
+                            @if(count($certPendientes) > 0)
+                            <div>
+                                <p class="text-[10px] font-black text-amber-600 uppercase mb-1.5">A agregar en esta inscripción</p>
+                                @foreach($certPendientes as $i => $cert)
+                                <div class="flex items-center gap-2 p-2.5 bg-amber-50 border border-amber-200 rounded-lg mb-1.5">
+                                    <svg class="w-4 h-4 text-amber-500 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v3m0 0v3m0-3h3m-3 0H9"/>
+                                    </svg>
+                                    <div class="flex-1 min-w-0">
+                                        <p class="text-xs font-bold text-gray-800 truncate">{{ $cert['nombre_certificado'] }}</p>
+                                        @if($cert['tipo'] || ($cert['anio'] ?? null)) <p class="text-[10px] text-gray-500">{{ $cert['tipo'] }} @if($cert['anio'] ?? null) · {{ $cert['anio'] }} @endif</p> @endif
+                                    </div>
+                                    <button wire:click="quitarCertPendiente({{ $i }})"
+                                        class="text-red-400 hover:text-red-600 transition shrink-0">
+                                        <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                                            <path fill-rule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clip-rule="evenodd"/>
+                                        </svg>
+                                    </button>
+                                </div>
+                                @endforeach
+                            </div>
+                            @endif
+
+                            @if(count($certExistentes) === 0 && count($certPendientes) === 0)
+                            <div class="p-4 border border-dashed border-gray-200 rounded-lg text-center">
+                                <p class="text-[11px] text-gray-400">Los certificados que agregues van a aparecer acá.</p>
+                            </div>
+                            @endif
+                        </div>
                     </div>
                 </div>
             </div>
@@ -1580,11 +1727,19 @@ new class extends Component {
                 @endif
 
                 @if($paso === 3)
-                <p class="text-[10px] text-gray-400 mr-2">Títulos y certificados son opcionales.</p>
+                @php
+                    $tieneAlgunTitulo = count($titulosExistentes) + count($titulosPendientes) > 0;
+                    $tieneAlgunCert   = count($certExistentes) + count($certPendientes) > 0;
+                @endphp
+                <p class="text-[10px] {{ $tieneAlgunTitulo ? 'text-gray-400' : 'text-red-500 font-bold' }} mr-2">
+                    {{ $tieneAlgunTitulo ? 'Certificados opcionales.' : 'Debe agregar al menos un título para continuar.' }}
+                </p>
                 <button wire:click="inscribirse"
                     wire:loading.attr="disabled"
                     wire:target="inscribirse"
-                    class="bg-green-600 hover:bg-green-700 text-white font-black px-6 py-2.5 rounded-xl text-sm uppercase shadow-md transition disabled:opacity-50 flex items-center gap-2">
+                    @if(!$tieneAlgunTitulo) disabled @endif
+                    @if(!$tieneAlgunCert) wire:confirm="No cargó ningún certificado. ¿Está seguro de que quiere inscribirse sin certificados?" @endif
+                    class="bg-green-600 hover:bg-green-700 text-white font-black px-6 py-2.5 rounded-xl text-sm uppercase shadow-md transition disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-2">
                     <span wire:loading.remove wire:target="inscribirse">
                         <svg class="w-4 h-4 inline mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>

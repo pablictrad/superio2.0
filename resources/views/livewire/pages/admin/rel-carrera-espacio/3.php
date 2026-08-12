@@ -12,7 +12,6 @@ use App\Models\Instituto;
 use Livewire\Attributes\Title;
 use Livewire\WithPagination;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Str;
 
 new #[Title('Relación Carrera - Espacio')] class extends Component
 {
@@ -39,12 +38,13 @@ new #[Title('Relación Carrera - Espacio')] class extends Component
 
     // Propiedades para nuevo registro
     public $newCarreraId    = '';
+    public $newEspacioId    = '';
+    public $newAnio         = '';
+    public $newHoraCatedra  = '';
+    public $newPeriodoId    = '';
+    public $newTurnoId      = '';
+    public $newPerfilId     = '';
     public $newInstitutoId  = '';
-
-    // Cada fila representa un Espacio Curricular a relacionar con la carrera seleccionada.
-    // Estructura: ['key' => uuid, 'espacio_id' => '', 'anio' => '', 'hora_catedra' => '',
-    //              'periodo_id' => '', 'turno_id' => '', 'perfil_id' => '']
-    public $newEspacios = [];
 
     // Propiedades para edición
     public $editId              = null;
@@ -67,7 +67,6 @@ new #[Title('Relación Carrera - Espacio')] class extends Component
         $this->espacios  = Espacio_curricular::orderBy('nombre_espacio')->get()->toArray();
         $this->perfiles  = Perfil::orderBy('nombre_perfil')->get()->toArray();
         $this->institutos = Instituto::orderBy('nombre')->get()->toArray();
-        $this->newEspacios = [$this->emptyEspacioRow()];
     }
 
     public function updatedBuscarCarrera(): void { $this->resetPage(); }
@@ -130,66 +129,16 @@ new #[Title('Relación Carrera - Espacio')] class extends Component
         return 'Sin perfil configurado';
     }
 
-    private function emptyEspacioRow(): array
-    {
-        return [
-            'key'          => (string) Str::uuid(),
-            'espacio_id'   => '',
-            'buscar'       => '',
-            'anio'         => '',
-            'hora_catedra' => '',
-            'periodo_id'   => '',
-            'turno_id'     => '',
-            'perfil_id'    => '',          
-        ];
-    }
-
-    public function agregarEspacioNuevo(): void
-    {
-        $this->newEspacios[] = $this->emptyEspacioRow();
-    }
-
-    public function quitarEspacioNuevo(string $key): void
-    {
-        // Siempre debe quedar al menos una fila
-        if (count($this->newEspacios) <= 1) {
-            return;
-        }
-
-        $this->newEspacios = array_values(array_filter(
-            $this->newEspacios,
-            fn($row) => $row['key'] !== $key
-        ));
-    }   
     #[Computed(cache: false)]
-    public function espaciosNuevoFiltrados($index)
+    public function espaciosNuevoFiltrados()
     {
-        $buscar = $this->newEspacios[$index]['buscar'] ?? '';
+        if (!$this->buscarEspacioNuevo) return $this->espacios;
 
-        $seleccionados = collect($this->newEspacios)
-            ->pluck('espacio_id')
-            ->filter()
-            ->values()
-            ->toArray();
-
-        return array_values(array_filter($this->espacios, function ($e) use ($buscar, $seleccionados, $index) {
-
-            if ($buscar && !str_contains(
-                strtolower($e['nombre_espacio']),
-                strtolower($buscar)
-            )) {
-                return false;
-            }
-
-            // No mostrar en otras filas un espacio ya seleccionado
-            $seleccionadoEnOtraFila = collect($this->newEspacios)
-                ->except($index)
-                ->pluck('espacio_id')
-                ->contains($e['idespaciocurricular']);
-
-            return !$seleccionadoEnOtraFila;
-        }));
+        return array_values(array_filter($this->espacios, fn($e) =>
+            str_contains(strtolower($e['nombre_espacio']), strtolower($this->buscarEspacioNuevo))
+        ));
     }
+
     #[Computed(cache: false)]
     public function espaciosEditFiltrados()
     {
@@ -246,73 +195,50 @@ new #[Title('Relación Carrera - Espacio')] class extends Component
     public function guardarNuevo(): void
     {
         $this->validate([
-            'newCarreraId'                => 'required',
-            'newEspacios'                 => 'required|array|min:1',
-            'newEspacios.*.espacio_id'    => 'required',
-            'newEspacios.*.anio'          => 'required|numeric',
-            'newEspacios.*.hora_catedra'  => 'required|numeric',
-        ], [
-            'newEspacios.*.espacio_id.required'   => 'Seleccione el Espacio Curricular en todas las filas.',
-            'newEspacios.*.anio.required'         => 'Complete el Año en todas las filas.',
-            'newEspacios.*.hora_catedra.required' => 'Complete las Horas en todas las filas.',
+            'newCarreraId'  => 'required',
+            'newEspacioId'  => 'required',
+            'newAnio'       => 'required',
+            'newHoraCatedra'=> 'required',
         ]);
 
-        // Evita cargar el mismo espacio curricular dos veces para la misma carrera
-        $espacioIds = array_column($this->newEspacios, 'espacio_id');
-        if (count($espacioIds) !== count(array_unique($espacioIds))) {
-            $this->addError('newEspacios', 'No puede repetir el mismo Espacio Curricular en varias filas.');
-            return;
-        }
-
-        foreach ($this->newEspacios as $row) {
-            RelCarreraEspacio::create([
-                'carrera_id'   => $this->newCarreraId,
-                'espacio_id'   => $row['espacio_id'],
-                'anio'         => $row['anio'],
-                'hora_catedra' => $row['hora_catedra'],
-                'periodo_id'   => $row['periodo_id']  ?: null,
-                'turno_id'     => $row['turno_id']    ?: null,
-                'perfil_id'    => $row['perfil_id']   ?: null,
-                'instituto_id' => $this->newInstitutoId ?: null,
-            ]);
-        }
-
-        $cantidad = count($this->newEspacios);
+        RelCarreraEspacio::create([
+            'carrera_id'   => $this->newCarreraId,
+            'espacio_id'   => $this->newEspacioId,
+            'anio'         => $this->newAnio,
+            'hora_catedra' => $this->newHoraCatedra,
+            'periodo_id'   => $this->newPeriodoId  ?: null,
+            'turno_id'     => $this->newTurnoId    ?: null,
+            'perfil_id'    => $this->newPerfilId   ?: null,
+            'instituto_id' => $this->newInstitutoId ?: null,
+        ]);
 
         $this->resetNewRecord();
         $this->dispatch('modal-close', name: 'create-modal');
-        $this->dispatch('toast', variant: 'success', heading: 'Éxito', text: $cantidad > 1
-            ? "{$cantidad} registros creados."
-            : 'Nuevo registro creado.');
+        $this->dispatch('toast', variant: 'success', heading: 'Éxito', text: 'Nuevo registro creado.');
     }
 
     #[On('perfilSeleccionado')]
-    public function recibirPerfil($id, $rowKey = null): void
+    public function recibirPerfil($id): void
     {
-        // Viene de una fila del modal de "nuevo registro"
-        if ($rowKey !== null) {
-            foreach ($this->newEspacios as $i => $row) {
-                if ($row['key'] === $rowKey) {
-                    $this->newEspacios[$i]['perfil_id'] = $id;
-                    break;
-                }
-            }
-            return;
-        }
-
-        // Viene del modal de edición (no tiene rowKey)
         if ($this->editId) {
             $this->editPerfilId = $id;
+        } else {
+            $this->newPerfilId = $id;
         }
     }
 
     public function resetNewRecord(): void
     {
         $this->newCarreraId       = '';
+        $this->newEspacioId       = '';
+        $this->newAnio            = '';
+        $this->newHoraCatedra     = '';
+        $this->newPeriodoId       = '';
+        $this->newTurnoId         = '';
+        $this->newPerfilId        = '';
         $this->newInstitutoId     = '';
         $this->newCarrerasFiltered = [];
         $this->buscarEspacioNuevo  = '';
-        $this->newEspacios         = [$this->emptyEspacioRow()];
     }
 };
 ?>
@@ -442,91 +368,63 @@ new #[Title('Relación Carrera - Espacio')] class extends Component
                     </select>
                 </flux:field>
 
+                <flux:field>
+                    <flux:label>Espacio Curricular</flux:label>
+                    <flux:input wire:model.live.debounce.300ms="buscarEspacioNuevo" icon="magnifying-glass" placeholder="Buscar espacio..." size="sm" class="mb-2" />
+                    <flux:select wire:model="newEspacioId" size="sm">
+                        <option value="">Seleccione...</option>
+                        @foreach($this->espaciosNuevoFiltrados as $e)
+                            <option value="{{ $e['idespaciocurricular'] }}">{{ $e['nombre_espacio'] }}</option>
+                        @endforeach
+                    </flux:select>
+                </flux:field>
+
+                <flux:field>
+                    <flux:label>Año</flux:label>
+                    <flux:input wire:model="newAnio" type="number" size="sm" />
+                </flux:field>
+
+                <flux:field>
+                    <flux:label>Horas</flux:label>
+                    <flux:input wire:model="newHoraCatedra" type="number" size="sm" />
+                </flux:field>
+
+                <flux:field>
+                    <flux:label>Periodo</flux:label>
+                    <flux:select wire:model="newPeriodoId" size="sm">
+                        <option value="">Seleccione...</option>
+                        @foreach($periodos as $p)
+                            <option value="{{ $p['idtb_periodo_cursado'] }}">{{ $p['nombre_periodo'] }}</option>
+                        @endforeach
+                    </flux:select>
+                </flux:field>
+
+                <flux:field>
+                    <flux:label>Turno</flux:label>
+                    <flux:select wire:model="newTurnoId" size="sm">
+                        <option value="">Seleccione...</option>
+                        @foreach($turnos as $t)
+                            <option value="{{ $t['id'] }}">{{ $t['nombre_turno'] }}</option>
+                        @endforeach
+                    </flux:select>
+                </flux:field>
             </div>
 
             <flux:field>
-                <flux:label>Buscar Espacio Curricular</flux:label>
-                <flux:input wire:model.live.debounce.300ms="buscarEspacioNuevo" icon="magnifying-glass" placeholder="Buscar espacio..." size="sm" />
-                <flux:description>El filtro aplica a todas las filas de abajo.</flux:description>
-            </flux:field>
-
-            @error('newEspacios')
-                <flux:callout variant="danger" icon="exclamation-triangle" heading="{{ $message }}" />
-            @enderror
-
-            <div class="space-y-4">
-                @foreach($newEspacios as $index => $row)
-                    <div wire:key="new-espacio-{{ $row['key'] }}" class="rounded-xl border border-zinc-200 dark:border-zinc-700 p-4 space-y-4">
-                        <div class="flex items-center justify-between">
-                            <flux:subheading class="!text-zinc-900 font-semibold">Espacio {{ $index + 1 }}</flux:subheading>
-                            @if(count($newEspacios) > 1)
-                                <flux:button wire:click="quitarEspacioNuevo('{{ $row['key'] }}')" variant="ghost" size="xs" icon="trash" class="!text-red-600" />
-                            @endif
-                        </div>
-
-                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                            <flux:field>
-                                <flux:label>Espacio Curricular</flux:label>
-                                <flux:select wire:model="newEspacios.{{ $index }}.espacio_id" size="sm">
-                                    <option value="">Seleccione...</option>
-                                    @foreach($this->espaciosNuevoFiltrados as $e)
-                                        <option value="{{ $e['idespaciocurricular'] }}">{{ $e['nombre_espacio'] }}</option>
-                                    @endforeach
-                                </flux:select>
-                            </flux:field>
-
-                            <flux:field>
-                                <flux:label>Año</flux:label>
-                                <flux:input wire:model="newEspacios.{{ $index }}.anio" type="number" size="sm" />
-                            </flux:field>
-
-                            <flux:field>
-                                <flux:label>Horas</flux:label>
-                                <flux:input wire:model="newEspacios.{{ $index }}.hora_catedra" type="number" size="sm" />
-                            </flux:field>
-
-                            <flux:field>
-                                <flux:label>Periodo</flux:label>
-                                <flux:select wire:model="newEspacios.{{ $index }}.periodo_id" size="sm">
-                                    <option value="">Seleccione...</option>
-                                    @foreach($periodos as $p)
-                                        <option value="{{ $p['idtb_periodo_cursado'] }}">{{ $p['nombre_periodo'] }}</option>
-                                    @endforeach
-                                </flux:select>
-                            </flux:field>
-
-                            <flux:field>
-                                <flux:label>Turno</flux:label>
-                                <flux:select wire:model="newEspacios.{{ $index }}.turno_id" size="sm">
-                                    <option value="">Seleccione...</option>
-                                    @foreach($turnos as $t)
-                                        <option value="{{ $t['id'] }}">{{ $t['nombre_turno'] }}</option>
-                                    @endforeach
-                                </flux:select>
-                            </flux:field>
-                        </div>
-
-                        <flux:field>
-                            <livewire:perfil :rowKey="$row['key']" :key="'perfil-new-'.$row['key']" />
-                            <div class="mt-2">
-                                <div class="w-full text-xs !text-zinc-900">
-                                    {{ $this->getPerfilTexto($row['perfil_id']) }}
-                                </div>
-                            </div>
-                        </flux:field>
+                {{-- REEMPLAZAR el flux:button suelto por esto: --}}
+             <livewire:perfil />
+                <div class="mt-4">
+                    <div class="w-full text-xs ...">
+                        {{ $this->getPerfilTexto($newPerfilId) }}
                     </div>
-                @endforeach
-            </div>
-
-            <flux:button wire:click="agregarEspacioNuevo" variant="ghost" size="sm" icon="plus">
-                Agregar otro Espacio Curricular
-            </flux:button>
+                </div>
+            </flux:field>
 
             <div class="flex justify-end gap-2 pt-6 border-t border-zinc-100 dark:border-zinc-800">
                 <flux:modal.close>
                     <flux:button variant="ghost" size="sm">Cancelar</flux:button>
                 </flux:modal.close>
-                <flux:button variant="primary" wire:click="guardarNuevo" size="sm">Guardar Registro{{ count($newEspacios) > 1 ? 's' : '' }}</flux:button>
+                <flux:button variant="primary" wire:click="guardarNuevo" size="sm">Guardar Registro</flux:button>
             </div>
         </div>
     </flux:modal>

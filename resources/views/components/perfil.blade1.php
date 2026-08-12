@@ -15,15 +15,6 @@ class Perfil extends Component
     public $nombrePerfilForm = '';
     public $modoEdicion = false;
 
-    // Identifica a qué fila del formulario padre pertenece esta instancia
-    // (null cuando se usa en un contexto de un solo registro, como el modal de edición)
-    public $rowKey = null;
-
-    public function mount($rowKey = null)
-    {
-        $this->rowKey = $rowKey;
-    }
-
     public function getPerfilesFiltradosProperty()
     {
         return PerfilModel::query()
@@ -40,7 +31,7 @@ class Perfil extends Component
     {
         $this->perfilSeleccionado = $id;
         $this->mostrarModalPerfiles = false;
-        $this->dispatch('perfilSeleccionado', id: $id, rowKey: $this->rowKey);
+        $this->dispatch('perfilSeleccionado', id: $id);
     }
 
     public function nuevoPerfil()

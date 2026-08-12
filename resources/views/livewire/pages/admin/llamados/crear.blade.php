@@ -265,7 +265,7 @@ new class extends Component {
         foreach ($espacios as $e) {
             $this->crearFilaLom($llamado, [
                 'id_instituto_superior' => $e->instituto_id,
-                'idCarrera'             => $e->carrera_id,
+                'idcarrera'             => $e->carrera_id,
                 'idespaciocurricular'   => $e->espacio_id,
                 'idtb_cargo'            => null,
             ]);
@@ -285,7 +285,7 @@ new class extends Component {
         foreach ($cargos as $c) {
             $this->crearFilaLom($llamado, [
                 'id_instituto_superior' => $c->instituto_id,
-                'idCarrera'             => $c->carrera_id,
+                'idcarrera'             => $c->carrera_id,
                 'idtb_cargo'            => $c->cargo_id,
                 'idespaciocurricular'   => null,
             ]);
@@ -308,7 +308,7 @@ new class extends Component {
             'idtb_zona'             => $llamado->idtb_zona,
             'idtipo_llamado'        => $llamado->idtipo_llamado,
             'id_instituto_superior' => $detalle['id_instituto_superior'],
-            'idCarrera'             => $detalle['idCarrera'],
+            'idcarrera'             => $detalle['idcarrera'],
             'idtb_cargo'            => $detalle['idtb_cargo'],
             'idespaciocurricular'   => $detalle['idespaciocurricular'],
             'idtb_tipoestado'       => 9, // generado, todavía no publicado
@@ -1224,10 +1224,7 @@ new class extends Component {
                                     @if($item->idtb_tipoestado == 8)
                                         <div class="flex flex-col items-center justify-center">
                                             <span class="bg-green-200 text-green-700 px-2 py-1 rounded-full text-[10px] font-black uppercase mb-1 border border-green-200 shadow-sm animate-pulse">Abierto</span>
-                                            <a href="{{ $item->url_form }}" target="_blank" 
-                                               class="inline-flex items-center bg-blue-600 hover:bg-blue-700 text-white font-black px-2 py-2 rounded-lg text-[10px] uppercase transition-all shadow-md hover:shadow-lg transform hover:-translate-y-0.5">
-                                                Postularme
-                                            </a>
+                                           
                                         </div>
                                     @else
                                         <span class="bg-red-200 text-red-600 px-2 py-1 rounded-full text-[10px] font-black uppercase border border-red-100">Cerrado</span>

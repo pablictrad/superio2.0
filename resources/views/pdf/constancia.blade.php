@@ -32,12 +32,13 @@
     }
     .org-sub { font-size: 7.5pt; color: #555; margin-top: 2px; }
     .doc-title {
-        font-size: 14pt;
+        font-size: 11pt;
         font-weight: bold;
         color: #1e3a5f;
         text-transform: uppercase;
-        letter-spacing: 1px;
+        letter-spacing: 0.5px;
         text-align: right;
+        white-space: nowrap;
     }
     .badge-codigo {
         display: inline-block;
@@ -182,10 +183,10 @@
     <table class="header-table">
         <tr>
             <td>
-                <div class="org-name">Sistema de Llamados Docentes — Nivel Superior</div>
+                <div class="org-name">Sistema de Convocatorias Docentes — Nivel Superior</div>
                 <div class="org-sub">La Rioja · Comisión Provisoria de Nivel Superior</div>
             </td>
-            <td style="text-align:right; width:260px">
+            <td style="text-align:right; width:280px">
                 <div class="doc-title">Constancia de Inscripción</div>
                 <span class="badge-codigo">{{ $inscripcion->codigo_constancia }}</span>
                 <div class="fecha-emision" style="clear:both; margin-top:6px">
@@ -203,18 +204,18 @@
     <div class="check">✓</div>
     <div class="title">Inscripción registrada exitosamente</div>
     <div class="sub">
-        Este documento acredita que el/la docente se ha inscripto al llamado indicado.<br>
+        Este documento acredita que el/la docente se ha inscripto a la convocatoria indicada.<br>
         Conserve esta constancia como comprobante.
     </div>
 </div>
 
 {{-- ═══════════════════════════════════════════════════════
-     DATOS DEL LLAMADO
+     DATOS DE LA CONVOCATORIA
 ═══════════════════════════════════════════════════════ --}}
-<div class="section-title">Datos del Llamado</div>
+<div class="section-title">Datos de la Convocatoria</div>
 <table class="meta-table">
     <tr>
-        <td class="label">Llamado N°</td>
+        <td class="label">Convocatoria N°</td>
         <td class="value">#{{ $llamado->id }}</td>
         <td class="label">Tipo</td>
         <td class="value">{{ $llamado->tipo_nombre ?? '—' }}</td>
@@ -299,7 +300,7 @@
         </td>
         <td class="label">Comprobante Domicilio</td>
         <td class="value">
-            @if(!empty($domicilio->archivo_factura ?? null) || !empty($domicilio->archivo_certifDomicilio ?? null))
+            @if(!empty($domicilio->archivo_factura ?? null) || !empty($domicilio->archivo_certifdomicilio ?? null))
                 <span class="badge-si">✓ SÍ</span>
             @else
                 <span class="badge-no">✗ NO</span>
@@ -341,8 +342,9 @@
 <table class="docs-table">
     <thead>
         <tr>
-            <th style="width:60%">Certificado</th>
-            <th style="width:40%">Tipo</th>
+            <th style="width:50%">Certificado</th>
+            <th style="width:30%">Tipo</th>
+            <th style="width:20%; text-align:center">Año</th>
         </tr>
     </thead>
     <tbody>
@@ -350,6 +352,7 @@
         <tr>
             <td>{{ $cert->nombre_certificado }}</td>
             <td>{{ $cert->tipo ?? '—' }}</td>
+            <td style="text-align:center">{{ $cert->anio ?? '—' }}</td>
         </tr>
         @endforeach
     </tbody>
@@ -372,7 +375,7 @@
 ═══════════════════════════════════════════════════════ --}}
 <div class="footer">
     <div class="footer-aviso">
-        Esta constancia es válida como comprobante de inscripción al llamado indicado.<br>
+        Esta constancia es válida como comprobante de inscripción a la convocatoria indicada.<br>
         La habilitación definitiva queda sujeta a la evaluación de antecedentes por la Comisión Provisoria.
     </div>
     <div style="text-align: right; font-size:8pt; color:#555; margin-bottom:20px">
@@ -383,7 +386,7 @@
         <span class="footer-firma">Sello y Firma Institucional</span>
     </div>
     <div class="footer-legal">
-        Comisión Provisoria de Nivel Superior · Sistema de Llamados Docentes ·
+        Comisión Provisoria de Nivel Superior · Sistema de Convocatorias Docentes ·
         Constancia generada automáticamente · Código {{ $inscripcion->codigo_constancia }}
     </div>
 </div>
