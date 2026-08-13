@@ -1735,7 +1735,6 @@ new class extends Component {
                     {{ $tieneAlgunTitulo ? 'Certificados opcionales.' : 'Debe agregar al menos un título para continuar.' }}
                 </p>
                 <button wire:click="inscribirse"
-                    wire:key="btn-inscribirse-{{ $tieneAlgunCert ? 'con-cert' : 'sin-cert' }}"
                     wire:loading.attr="disabled"
                     wire:target="inscribirse"
                     @if(!$tieneAlgunTitulo) disabled @endif

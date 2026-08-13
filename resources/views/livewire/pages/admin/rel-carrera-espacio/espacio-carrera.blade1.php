@@ -22,7 +22,8 @@ new #[Title('Relación Carrera - Espacio')] class extends Component
     public $buscarEspacio = '';
     public $buscarPerfil  = '';
 
-    // Búsqueda dentro del combo de Espacio Curricular (modal de edición)
+    // Búsqueda dentro de los combos de Espacio Curricular
+    public $buscarEspacioNuevo = '';
     public $buscarEspacioEdit  = '';
 
     public $turnos    = [];
@@ -310,6 +311,7 @@ new #[Title('Relación Carrera - Espacio')] class extends Component
         $this->newCarreraId       = '';
         $this->newInstitutoId     = '';
         $this->newCarrerasFiltered = [];
+        $this->buscarEspacioNuevo  = '';
         $this->newEspacios         = [$this->emptyEspacioRow()];
     }
 };
@@ -442,6 +444,12 @@ new #[Title('Relación Carrera - Espacio')] class extends Component
 
             </div>
 
+            <flux:field>
+                <flux:label>Buscar Espacio Curricular</flux:label>
+                <flux:input wire:model.live.debounce.300ms="buscarEspacioNuevo" icon="magnifying-glass" placeholder="Buscar espacio..." size="sm" />
+                <flux:description>El filtro aplica a todas las filas de abajo.</flux:description>
+            </flux:field>
+
             @error('newEspacios')
                 <flux:callout variant="danger" icon="exclamation-triangle" heading="{{ $message }}" />
             @enderror
@@ -457,16 +465,11 @@ new #[Title('Relación Carrera - Espacio')] class extends Component
                         </div>
 
                         <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                            <flux:field class="md:col-span-2">
-                                <flux:label>Buscar Espacio Curricular</flux:label>
-                                <flux:input wire:model.live.debounce.300ms="newEspacios.{{ $index }}.buscar" icon="magnifying-glass" placeholder="Buscar espacio..." size="sm" />
-                            </flux:field>
-
-                            <flux:field class="md:col-span-2">
+                            <flux:field>
                                 <flux:label>Espacio Curricular</flux:label>
-                                <flux:select wire:model.live="newEspacios.{{ $index }}.espacio_id" size="sm">
+                                <flux:select wire:model="newEspacios.{{ $index }}.espacio_id" size="sm">
                                     <option value="">Seleccione...</option>
-                                    @foreach($this->espaciosNuevoFiltrados($index) as $e)
+                                    @foreach($this->espaciosNuevoFiltrados as $e)
                                         <option value="{{ $e['idespaciocurricular'] }}">{{ $e['nombre_espacio'] }}</option>
                                     @endforeach
                                 </flux:select>
