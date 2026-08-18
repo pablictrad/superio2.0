@@ -62,11 +62,17 @@ Route::middleware(['auth', 'verified'])->group(function () {
     ->name('admin.lom.crear');
      Volt::route('admin/catalogos', 'pages.admin.catalogos.abm-catalogos')->name('admin.catalogos');
   
-     Volt::route('admin/requisitos', 'pages.admin.requisitos')
+    Volt::route('admin/requisitos', 'pages.admin.requisitos')
         ->name('admin.requisitos');
 
-     Volt::route('admin/docentes', 'pages.admin.docentes.gestionar-docentes')
+    Volt::route('admin/docentes', 'pages.admin.docentes.gestionar-docentes')
         ->name('admin.docentes');
+
+    Volt::route('admin/auditoria', 'pages.admin.auditoria.gestionar-auditoria')
+        ->name('admin.auditoria');
+
+    Volt::route('/admin/dashboard', 'pages.admin.dashboard.dashboard')
+        ->name('admin.dashboard');
 });
  
 // PUBLICAS

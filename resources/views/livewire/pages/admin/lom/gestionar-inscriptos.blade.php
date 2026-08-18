@@ -18,6 +18,7 @@
 use Livewire\Attributes\On;
 use Livewire\Volt\Component;
 use Illuminate\Support\Facades\DB;
+use App\Support\Auditoria;
 
 
 new class extends Component {
@@ -214,8 +215,17 @@ new class extends Component {
                 'updated_at'    => now(),
             ]);
 
+        $idEditado = $this->editandoId;
         $this->editandoId = null;
         $this->setMensaje('ok', 'Inscripto actualizado correctamente.');
+
+        Auditoria::registrar(
+            'editar_inscripcion',
+            'inscripcion',
+            $idEditado,
+            "Estado: {$this->editEstado} · Puntaje: " . ($this->editPuntaje !== '' ? $this->editPuntaje : 's/d') . " · Orden: " . ($this->editOrden !== '' ? $this->editOrden : 's/d')
+        );
+
         $this->cargarInscriptos();
     }
 
@@ -229,6 +239,7 @@ new class extends Component {
     public function eliminarInscripto(int $id): void
     {
         DB::table('inscripciones_llamado')->where('id', $id)->delete();
+        Auditoria::registrar('eliminar_inscripcion', 'inscripcion', $id);
         $this->setMensaje('ok', 'Inscripto eliminado.');
         $this->cargarInscriptos();
     }
@@ -315,6 +326,7 @@ new class extends Component {
 
         $this->cargarInscriptos();
         $this->verDocumentacion($this->docInscriptoId);
+        Auditoria::registrar('aprobar_f2', 'inscripcion', $this->docInscriptoId);
         $this->setMensaje('ok', 'F2 aprobado correctamente.');
     }
 
@@ -350,10 +362,12 @@ new class extends Component {
                 'updated_at'                  => now(),
             ]);
 
+        $motivo = $this->obsRechazoF2;
         $this->rechazandoF2 = false;
         $this->obsRechazoF2 = '';
         $this->cargarInscriptos();
         $this->verDocumentacion($this->docInscriptoId);
+        Auditoria::registrar('rechazar_f2', 'inscripcion', $this->docInscriptoId, $motivo);
         $this->setMensaje('ok', 'F2 rechazado.');
     }
 
@@ -373,6 +387,7 @@ new class extends Component {
             ]);
 
         $this->docDomicilio = $this->buscarDomicilio($this->docDomicilio->idtb_domicilio);
+        Auditoria::registrar('aprobar_domicilio', 'domicilio', $this->docDomicilio->idtb_domicilio);
         $this->setMensaje('ok', 'DNI/domicilio aprobado correctamente.');
     }
 
@@ -409,7 +424,9 @@ new class extends Component {
 
         $this->rechazandoDomicilio = false;
         $this->obsRechazoDomicilio = '';
-        $this->docDomicilio = $this->buscarDomicilio($this->docDomicilio->idtb_domicilio);
+        $domicilioId = $this->docDomicilio->idtb_domicilio;
+        $this->docDomicilio = $this->buscarDomicilio($domicilioId);
+        Auditoria::registrar('rechazar_domicilio', 'domicilio', $domicilioId, $this->docDomicilio->observacion_verificacion ?? null);
         $this->setMensaje('ok', 'DNI/domicilio rechazado.');
     }
 
@@ -443,6 +460,7 @@ new class extends Component {
             ->update(['idtb_tipoestado' => 8]);
 
         $this->lomPublicado = true;
+        Auditoria::registrar('publicar_lom', 'llamado', $this->llamadoId, "LOM publicado (id_lom: {$lom->idtb_lom})");
         $this->setMensaje('ok', 'LOM publicado correctamente. Ya está disponible en el listado público.');
     }
 

@@ -94,6 +94,7 @@ new class extends Component {
     public string $nuevoTituloNombre     = '';
     public string $nuevoTituloInstitucion= '';
     public string $nuevoTituloAnio       = '';
+    public string $nuevoTituloRegistro   = '';
     public $nuevoTituloArchivo           = null;
     public string $errorTitulo           = '';
 
@@ -110,12 +111,12 @@ new class extends Component {
     public string $codigoConstancia      = '';
     public string $mensajeErr            = '';
 
-    // ── Tipos de certificado ───────────────────────────────────────
+    // ── Tipos de Antecedentes ───────────────────────────────────────
     public array $tiposCert = [
         'Capacitación',
-        'Antigüedad',
-        'Desempeño',
-        'Perfeccionamiento',
+        'Certificado de Servicio',
+        'Concepto Anual',
+        'Postíttulos(Actualización, especialización, maestría, doctorado...)',
         'Otro',
     ];
 
@@ -445,6 +446,7 @@ new class extends Component {
             'nuevoTituloNombre'      => 'required|min:3|max:200',
             'nuevoTituloInstitucion' => 'nullable|max:200',
             'nuevoTituloAnio'        => 'required|digits:4|integer|min:1950|max:' . date('Y'),
+        
             'nuevoTituloArchivo'     => $esPrimerTitulo
                 ? 'required|file|mimes:pdf,jpg,jpeg,png|max:10240'
                 : 'nullable|file|mimes:pdf,jpg,jpeg,png|max:10240',
@@ -453,6 +455,10 @@ new class extends Component {
             'nuevoTituloAnio.required'   => 'El año de egreso es obligatorio.',
             'nuevoTituloAnio.digits'     => 'El año debe tener 4 dígitos.',
             'nuevoTituloAnio.max'        => 'El año no puede ser posterior al actual.',
+            'nuevoTituloRegistro.required' => 'El número de registro es obligatorio.',
+           
+            'nuevoTituloRegistro.min'      => 'El número de registro debe ser un valor positivo.',
+            'nuevoTituloRegistro.max'      => 'El número de registro no puede superar 99999.',
             'nuevoTituloArchivo.required' => 'Debe adjuntar el archivo: es su primer título registrado.',
             'nuevoTituloArchivo.mimes'   => 'El archivo debe ser PDF, JPG o PNG.',
             'nuevoTituloArchivo.max'     => 'El archivo no puede superar 10MB.',
@@ -484,6 +490,7 @@ new class extends Component {
             'nombre_titulo'           => $nombreNormalizado,
             'institucion'             => trim($this->nuevoTituloInstitucion) ?: null,
             'anio_egreso'             => $this->nuevoTituloAnio ?: null,
+            'num_registro' => $this->nuevoTituloRegistro ?: null,
             'archivo_path'            => $archivoPath,
             'archivo_nombre_original' => $archivoNombre,
         ];
@@ -491,6 +498,7 @@ new class extends Component {
         $this->nuevoTituloNombre      = '';
         $this->nuevoTituloInstitucion = '';
         $this->nuevoTituloAnio        = '';
+        $this->nuevoTituloRegistro    = '';
         $this->nuevoTituloArchivo     = null;
     }
 
@@ -524,13 +532,13 @@ new class extends Component {
         $this->validate([
             'nuevoCertNombre'  => 'required|min:3|max:200',
             'nuevoCertTipo'    => 'required|max:50',
-            'nuevoCertAnio'    => 'required|digits:4|integer|min:1950|max:' . date('Y'),
+            'nuevoCertAnio'    => 'nullable|digits:4|integer|min:1950|max:' . date('Y'),
             'nuevoCertArchivo' => 'required|file|mimes:pdf,jpg,jpeg,png|max:10240',
         ], [
             'nuevoCertNombre.required'  => 'Ingrese el nombre del certificado.',
             'nuevoCertTipo.required'    => 'Seleccione una categoría.',
-            'nuevoCertAnio.required'    => 'El año es obligatorio.',
-            'nuevoCertAnio.digits'      => 'El año debe tener 4 dígitos.',
+            'nuevoCertAnio'    => 'El año es obligatorio.',
+            'nuevoCertAnio'      => 'El año debe tener 4 dígitos.',
             'nuevoCertAnio.max'         => 'El año no puede ser posterior al actual.',
             'nuevoCertArchivo.required' => 'Debe adjuntar el archivo del certificado.',
             'nuevoCertArchivo.mimes'    => 'El archivo debe ser PDF, JPG o PNG.',
@@ -655,6 +663,7 @@ new class extends Component {
                         'nombre_titulo'           => $tit['nombre_titulo'],
                         'institucion'             => $tit['institucion'],
                         'anio_egreso'             => $tit['anio_egreso'],
+                        'num_registro'            => $tit['num_registro'],                     
                         'archivo_path'            => $tit['archivo_path'],
                         'archivo_nombre_original' => $tit['archivo_nombre_original'],
                         'created_at'              => now(),
@@ -813,7 +822,7 @@ new class extends Component {
             'localidadId','zonaDocente','zonaTexto','zonaValida',
             'domicilioExistente','domicilioAprobado','solicitandoCambioZona','domicilioIdOriginal',
             'titulosExistentes','titulosPendientes',
-            'nuevoTituloNombre','nuevoTituloInstitucion','nuevoTituloAnio','nuevoTituloArchivo',
+            'nuevoTituloNombre','nuevoTituloInstitucion','nuevoTituloAnio','nuevoTituloRegistro','nuevoTituloArchivo',
             'errorTitulo',
             'certExistentes','certPendientes',
             'nuevoCertNombre','nuevoCertTipo','nuevoCertAnio','nuevoCertArchivo','errorCert',
@@ -1368,7 +1377,7 @@ new class extends Component {
                                     <input wire:model="nuevoTituloInstitucion" type="text" placeholder="Ej: UNLaR"
                                         class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-400 focus:border-indigo-400 transition">
                                 </div>
-                                <div class="sm:col-span-2">
+                                <div class="sm:col-span-4">
                                     <label class="block text-[10px] font-black text-gray-500 mb-1 uppercase">
                                         Año de egreso <span class="text-red-500">*</span>
                                     </label>
@@ -1376,6 +1385,13 @@ new class extends Component {
                                         class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-400 focus:border-indigo-400 transition
                                                @error('nuevoTituloAnio') border-red-400 bg-red-50 @enderror">
                                     @error('nuevoTituloAnio') <p class="mt-1 text-xs text-red-600 font-medium">{{ $message }}</p> @enderror
+                                    <label class="block text-[10px] font-black text-gray-500 mb-1 uppercase">
+                                       N° de Registro Provincial <span class="text-red-500">*</span>
+                                    </label>
+                                     <input wire:model="nuevoTituloRegistro" type="number"  placeholder="ingrese el número de registro del título"
+                                        class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-400 focus:border-indigo-400 transition
+                                               @error('nuevoTituloRegistro') border-red-400 bg-red-50 @enderror">
+                                    @error('nuevoTituloRegistro') <p class="mt-1 text-xs text-red-600 font-medium">{{ $message }}</p> @enderror
                                 </div>
                                 <div class="sm:col-span-2">
                                     <label class="block text-[10px] font-black text-gray-500 mb-1 uppercase">
@@ -1435,6 +1451,9 @@ new class extends Component {
                                         <p class="text-xs font-bold text-gray-800 truncate">{{ $tit->nombre_titulo }}</p>
                                         @if($tit->institucion)
                                         <p class="text-[10px] text-gray-500">{{ $tit->institucion }} @if($tit->anio_egreso) · {{ $tit->anio_egreso }} @endif</p>
+                                        @if($tit->num_registro)
+                                        <p class="text-[10px] text-gray-500">Registro: {{ $tit->num_registro }}</p>
+                                        @endif
                                         @endif
                                     </div>
                                     @if($tit->archivo_path)
@@ -1463,6 +1482,7 @@ new class extends Component {
                                         <p class="text-xs font-bold text-gray-800 truncate">{{ $tit['nombre_titulo'] }}</p>
                                         @if($tit['institucion'])
                                         <p class="text-[10px] text-gray-500">{{ $tit['institucion'] }} @if($tit['anio_egreso']) · {{ $tit['anio_egreso'] }} @endif</p>
+                                       
                                         @endif
                                     </div>
                                     <button wire:click="quitarTituloPendiente({{ $i }})"
@@ -1493,7 +1513,7 @@ new class extends Component {
                 <div class="flex items-center justify-between mb-3">
                     <h3 class="text-sm font-black text-gray-700 uppercase tracking-wide flex items-center gap-2">
                         <span class="w-6 h-6 rounded-full bg-teal-600 text-white text-xs flex items-center justify-center font-black">C</span>
-                        Certificados
+                        Antecedentes
                     </h3>
                     @if(count($certExistentes) > 0 || count($certPendientes) > 0)
                     <span class="bg-teal-100 text-teal-700 text-xs font-black px-2 py-0.5 rounded-full">
@@ -1543,7 +1563,7 @@ new class extends Component {
                                     </select>
                                     @error('nuevoCertTipo') <p class="mt-1 text-xs text-red-600 font-medium">{{ $message }}</p> @enderror
                                 </div>
-                                <div>
+                                <!-- <div>
                                     <label class="block text-[10px] font-black text-gray-500 mb-1 uppercase">
                                         Año <span class="text-red-500">*</span>
                                     </label>
@@ -1551,7 +1571,7 @@ new class extends Component {
                                         class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-teal-400 focus:border-teal-400 transition
                                                @error('nuevoCertAnio') border-red-400 bg-red-50 @enderror">
                                     @error('nuevoCertAnio') <p class="mt-1 text-xs text-red-600 font-medium">{{ $message }}</p> @enderror
-                                </div>
+                                </div> -->
                                 <div class="sm:col-span-2">
                                     <label class="block text-[10px] font-black text-gray-500 mb-1 uppercase">
                                         Adjuntar (PDF, JPG, PNG — máx. 10MB) <span class="text-red-500">*</span>

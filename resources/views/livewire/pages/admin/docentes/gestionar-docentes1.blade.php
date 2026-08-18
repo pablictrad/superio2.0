@@ -13,7 +13,7 @@ use Illuminate\Support\Facades\DB;
  *   - Domicilio (DNI + comprobante de zona) -> tb_domicilio.tipoestado_id
  *   - Títulos                                -> tb_docente_titulos.estado_id
  *   - Certificados                           -> tb_docente_certificados.estado_id
- *   - F2 (por cada inscripción a un llamado)  -> inscripciones_llamado.f2_estado_id
+ *   - F2 (por cada inscripción a una convocatoria)  -> inscripciones_llamado.f2_estado_id
  *
  * Estados (tb_estado_documento): 1 Pendiente, 2 Aprobado, 3 Rechazado,
  * 4 Cambio de zona solicitado (solo domicilio), 5 Reemplazado (solo domicilio)
@@ -202,7 +202,7 @@ new class extends Component {
             return collect();
         }
 
-        return DB::table('inscripciones_llamado as il')
+        $inscripciones = DB::table('inscripciones_llamado as il')
             ->leftJoin('nuevo_llamado as l', 'il.llamado_id', '=', 'l.id')
             ->leftJoin('tipo_llamado as tl', 'l.idtipo_llamado', '=', 'tl.id')
             ->leftJoin('tb_zona as z', 'l.idtb_zona', '=', 'z.id')
@@ -213,15 +213,69 @@ new class extends Component {
                 'il.id', 'il.llamado_id', 'il.puntaje', 'il.estado', 'il.orden',
                 'il.f2_path', 'il.f2_estado_id', 'il.f2_observacion_verificacion',
                 'est.nombre as f2_estado_nombre',
-                'l.descripcion as llamado_nombre',
-                'l.fecha_ini as llamado_fecha_ini',
-                'l.fecha_fin as llamado_fecha_fin',
-                'tl.nombre as llamado_tipo',
-                'z.nombre_zona as llamado_zona',
-                'te.nombre_tipoestado as llamado_estado_nombre'
+                // AJUSTAR: si nuevo_llamado tiene columna propia de número/código, reemplazar aquí.
+                'il.llamado_id as convocatoria_numero',
+                'l.descripcion as convocatoria_nombre',
+                'l.fecha_ini as convocatoria_fecha_ini',
+                'l.fecha_fin as convocatoria_fecha_fin',
+                'tl.nombre as convocatoria_tipo',
+                'z.nombre_zona as convocatoria_zona',
+                'te.nombre_tipoestado as convocatoria_estado_nombre'
             )
             ->orderByDesc('il.created_at')
             ->get();
+
+        $llamadoIds = $inscripciones->pluck('llamado_id')->filter()->unique()->values();
+
+        $cargosPorLlamado   = collect();
+        $espaciosPorLlamado = collect();
+
+        if ($llamadoIds->isNotEmpty()) {
+            // AJUSTAR: confirmar el nombre exacto de la FK (aparece truncada en Navicat
+            // como "nuevo_rel_in..."); se asume nuevo_rel_instituto_cargo_id.
+            $cargosPorLlamado = DB::table('nuevo_cargo_por_llamado as ncl')
+                ->join('nuevo_rel_instituto_cargo as ric', 'ncl.nuevo_rel_instituto_cargo_id', '=', 'ric.id')
+                ->leftJoin('tb_instituto_superior as ins', 'ncl.instituto_id', '=', 'ins.id')
+                ->leftJoin('tb_cargos as c', 'ric.cargo_id', '=', 'c.id')
+                ->leftJoin('tb_turnos as t', 'ric.turno_id', '=', 't.id')
+                ->whereIn('ncl.llamado_id', $llamadoIds)
+                ->select(
+                    'ncl.llamado_id',
+                    'ins.nombre as instituto_nombre',
+                    'c.nombre_cargo',
+                    't.nombre_turno',
+                    'ncl.horario_cargo'
+                )
+                ->get()
+                ->groupBy('llamado_id');
+
+            // AJUSTAR: ídem, se asume nuevo_rel_carrera_espacio_id como FK.
+            $espaciosPorLlamado = DB::table('nuevo_espacios_por_llamado as nel')
+                ->join('nuevo_rel_carrera_espacio as rce', 'nel.nuevo_rel_carrera_espacio_id', '=', 'rce.id')
+                ->leftJoin('tb_instituto_superior as ins', 'nel.instituto_id', '=', 'ins.id')
+                ->leftJoin('tb_carreras as car', 'rce.carrera_id', '=', 'car.id')
+                ->leftJoin('tb_espacioscurriculares as esp', 'rce.espacio_id', '=', 'esp.idespaciocurricular')
+                ->leftJoin('tb_turnos as t', 'rce.turno_id', '=', 't.id')
+                ->whereIn('nel.llamado_id', $llamadoIds)
+                ->select(
+                    'nel.llamado_id',
+                    'ins.nombre as instituto_nombre',
+                    'car.nombre as carrera_nombre',
+                    'esp.nombre_espacio',
+                    't.nombre_turno',
+                    'rce.anio',
+                    'nel.horario_espacio'
+                )
+                ->get()
+                ->groupBy('llamado_id');
+        }
+
+        return $inscripciones->map(function ($insc) use ($cargosPorLlamado, $espaciosPorLlamado) {
+            $insc = is_array($insc) ? (object) $insc : $insc;
+            $insc->cargos   = $cargosPorLlamado->get($insc->llamado_id, collect());
+            $insc->espacios = $espaciosPorLlamado->get($insc->llamado_id, collect());
+            return $insc;
+        });
     }
 
     public function verDetalle(int $docenteId): void
@@ -551,14 +605,15 @@ new class extends Component {
 
                 <flux:separator />
 
-                {{-- ── HISTORIAL DE INSCRIPCIONES + F2 ──────────────────────── --}}
+                {{-- ── HISTORIAL DE INSCRIPCIONES A CONVOCATORIAS + F2 ──────── --}}
                 <div>
-                    <flux:heading size="sm" class="mb-2">Historial de inscripciones y F2</flux:heading>
+                    <flux:heading size="sm" class="mb-2">Historial de convocatorias y F2</flux:heading>
                     @forelse ($this->inscripciones as $insc)
                         <div class="rounded-lg border p-3 mb-2 {{ $insc->f2_estado_id == 2 ? 'border-green-200 bg-green-50/30' : ($insc->f2_estado_id == 3 ? 'border-red-200 bg-red-50/30' : 'border-gray-200') }}">
                             <div class="flex items-center justify-between">
                                 <span class="text-sm font-medium">
-                                    {{ $insc->llamado_nombre ?? 'Llamado #'.$insc->llamado_id }}
+                                    {{ $insc->convocatoria_nombre ?? 'Convocatoria #'.$insc->convocatoria_numero }}
+                                    <span class="text-xs text-gray-400">N° {{ $insc->convocatoria_numero }}</span>
                                 </span>
                                 <flux:badge size="sm" color="{{ $insc->puntaje ? 'green' : 'zinc' }}">
                                     Puntaje: {{ $insc->puntaje ?? 'Sin calificar' }}
@@ -566,14 +621,14 @@ new class extends Component {
                             </div>
 
                             <div class="mt-1 flex flex-wrap gap-2 text-xs text-gray-500">
-                                @if($insc->llamado_tipo)
-                                    <span class="px-1.5 py-0.5 rounded bg-gray-100">{{ $insc->llamado_tipo }}</span>
+                                @if($insc->convocatoria_tipo)
+                                    <span class="px-1.5 py-0.5 rounded bg-gray-100">{{ $insc->convocatoria_tipo }}</span>
                                 @endif
-                                @if($insc->llamado_zona)
-                                    <span class="px-1.5 py-0.5 rounded bg-slate-100">Zona {{ $insc->llamado_zona }}</span>
+                                @if($insc->convocatoria_zona)
+                                    <span class="px-1.5 py-0.5 rounded bg-slate-100">Zona {{ $insc->convocatoria_zona }}</span>
                                 @endif
-                                @if($insc->llamado_estado_nombre)
-                                    <span class="px-1.5 py-0.5 rounded bg-blue-50 text-blue-600">{{ $insc->llamado_estado_nombre }}</span>
+                                @if($insc->convocatoria_estado_nombre)
+                                    <span class="px-1.5 py-0.5 rounded bg-blue-50 text-blue-600">{{ $insc->convocatoria_estado_nombre }}</span>
                                 @endif
                                 @if($insc->estado)
                                     <span class="px-1.5 py-0.5 rounded {{ $insc->estado === 'habilitado' ? 'bg-green-50 text-green-600' : ($insc->estado === 'sin_clasificar' ? 'bg-red-50 text-red-600' : 'bg-amber-50 text-amber-600') }}">
@@ -585,15 +640,55 @@ new class extends Component {
                                 @endif
                             </div>
 
-                            @if($insc->llamado_fecha_ini || $insc->llamado_fecha_fin)
+                            @if($insc->convocatoria_fecha_ini || $insc->convocatoria_fecha_fin)
                                 <p class="mt-1 text-[11px] text-gray-400">
-                                    {{ $insc->llamado_fecha_ini ? \Carbon\Carbon::parse($insc->llamado_fecha_ini)->format('d/m/Y') : '—' }}
+                                    {{ $insc->convocatoria_fecha_ini ? \Carbon\Carbon::parse($insc->convocatoria_fecha_ini)->format('d/m/Y') : '—' }}
                                     al
-                                    {{ $insc->llamado_fecha_fin ? \Carbon\Carbon::parse($insc->llamado_fecha_fin)->format('d/m/Y H:i') : '—' }}
+                                    {{ $insc->convocatoria_fecha_fin ? \Carbon\Carbon::parse($insc->convocatoria_fecha_fin)->format('d/m/Y H:i') : '—' }}
                                 </p>
                             @endif
 
-                            <div class="mt-1 flex items-center gap-2">
+                            {{-- ── Cargos de la convocatoria (institutos, turno) ────── --}}
+                            @if($insc->cargos->isNotEmpty())
+                                <div class="mt-2 space-y-1">
+                                    @foreach($insc->cargos as $cargo)
+                                        <div class="text-xs text-gray-600 bg-gray-50 rounded px-2 py-1">
+                                            <span class="font-medium">{{ $cargo->nombre_cargo ?? 'Cargo sin definir' }}</span>
+                                            @if($cargo->instituto_nombre)
+                                                · {{ $cargo->instituto_nombre }}
+                                            @endif
+                                            @if($cargo->nombre_turno)
+                                                · Turno {{ $cargo->nombre_turno }}
+                                            @endif
+                                        </div>
+                                    @endforeach
+                                </div>
+                            @endif
+
+                            {{-- ── Espacios curriculares de la convocatoria (carrera, turno) ── --}}
+                            @if($insc->espacios->isNotEmpty())
+                                <div class="mt-2 space-y-1">
+                                    @foreach($insc->espacios as $esp)
+                                        <div class="text-xs text-gray-600 bg-gray-50 rounded px-2 py-1">
+                                            <span class="font-medium">{{ $esp->nombre_espacio ?? 'Espacio sin definir' }}</span>
+                                            @if($esp->carrera_nombre)
+                                                · {{ $esp->carrera_nombre }}
+                                            @endif
+                                            @if($esp->instituto_nombre)
+                                                · {{ $esp->instituto_nombre }}
+                                            @endif
+                                            @if($esp->nombre_turno)
+                                                · Turno {{ $esp->nombre_turno }}
+                                            @endif
+                                            @if($esp->anio)
+                                                · {{ $esp->anio }}° año
+                                            @endif
+                                        </div>
+                                    @endforeach
+                                </div>
+                            @endif
+
+                            <div class="mt-2 flex items-center gap-2">
                                 <span class="text-xs text-gray-500">F2:</span>
                                 @if($insc->f2_path)
                                     <a href="{{ asset('storage/'.$insc->f2_path) }}" target="_blank" class="text-xs text-indigo-600 underline">Ver archivo</a>
@@ -624,7 +719,7 @@ new class extends Component {
                             @endif
                         </div>
                     @empty
-                        <p class="text-xs text-gray-400 italic">Sin inscripciones registradas.</p>
+                        <p class="text-xs text-gray-400 italic">Sin inscripciones a convocatorias registradas.</p>
                     @endforelse
                 </div>
             @endif

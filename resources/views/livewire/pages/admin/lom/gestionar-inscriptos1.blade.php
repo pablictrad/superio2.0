@@ -43,6 +43,9 @@ new class extends Component {
     public bool $lomExiste     = false;
     public bool $lomPublicado  = false;
 
+    // Si el llamado todavía está abierto (no se puede publicar el LOM mientras tanto)
+    public bool $llamadoAbierto = false;
+
     // Modal de documentación del inscripto
     public bool  $docModalAbierto = false;
     public ?int  $docInscriptoId  = null;
@@ -57,6 +60,10 @@ new class extends Component {
     // Aprobación / rechazo de F2 (dentro del modal de documentación)
     public bool   $rechazandoF2 = false;
     public string $obsRechazoF2 = '';
+
+    // Aprobación / rechazo de Domicilio/DNI (mismo campo que usa gestionar-docentes)
+    public bool   $rechazandoDomicilio = false;
+    public string $obsRechazoDomicilio = '';
 
     /* ── ABRIR PANEL ──────────────────────────────────────────────── */
   
@@ -84,9 +91,18 @@ new class extends Component {
                 'nuevo_llamado.id',
                 'tipo_llamado.nombre as tipo_nombre',
                 'tb_zona.nombre_zona',
-                'nuevo_llamado.idtb_tipoestado'
+                'nuevo_llamado.idtb_tipoestado',
+                'nuevo_llamado.fecha_fin' // AJUSTAR: confirmar nombre exacto de la columna en nuevo_llamado
             )
             ->first();
+
+        // Un llamado se considera "abierto" solo si el catálogo lo marca como Abierto (8)
+        // Y además la fecha_fin todavía no venció (por si cerrarVencidos() aún no corrió).
+        $estadoAbierto = $this->llamadoInfo && (int) $this->llamadoInfo->idtb_tipoestado === 8;
+        $noVencido     = !$this->llamadoInfo || empty($this->llamadoInfo->fecha_fin)
+            || now()->lessThanOrEqualTo($this->llamadoInfo->fecha_fin);
+
+        $this->llamadoAbierto = $estadoAbierto && $noVencido;
     }
     private function cargarInfoLom(): void
     {
@@ -245,24 +261,27 @@ new class extends Component {
                 ->where('id', $this->docInscripto->docente_id)
                 ->value('domicilio_id');
 
-            $this->docDomicilio = $domicilioId
-                ? DB::table('tb_domicilio')
-                    ->leftJoin('tb_localidades', 'tb_domicilio.localidad_id', '=', 'tb_localidades.id')
-                    ->leftJoin('tb_departamentos', 'tb_localidades.iddepartamento', '=', 'tb_departamentos.iddepartamento')
-                    ->where('tb_domicilio.idtb_domicilio', $domicilioId)
-                    ->select(
-                        'tb_domicilio.*',
-                        'tb_localidades.localidad as localidad_nombre',
-                        'tb_localidades.zona_override',
-                        'tb_departamentos.zona as zona_departamento'
-                    )
-                    ->first()
-                : null;
+            $this->docDomicilio = $domicilioId ? $this->buscarDomicilio($domicilioId) : null;
         } else {
             $this->docDomicilio = null;
         }
 
         $this->docModalAbierto = true;
+    }
+
+    private function buscarDomicilio(int $domicilioId)
+    {
+        return DB::table('tb_domicilio')
+            ->leftJoin('tb_localidades', 'tb_domicilio.localidad_id', '=', 'tb_localidades.id')
+            ->leftJoin('tb_departamentos', 'tb_localidades.iddepartamento', '=', 'tb_departamentos.iddepartamento')
+            ->where('tb_domicilio.idtb_domicilio', $domicilioId)
+            ->select(
+                'tb_domicilio.*',
+                'tb_localidades.localidad as localidad_nombre',
+                'tb_localidades.zona_override',
+                'tb_departamentos.zona as zona_departamento'
+            )
+            ->first();
     }
 
     public function cerrarDocModal(): void
@@ -275,6 +294,8 @@ new class extends Component {
         $this->docDomicilio    = null;
         $this->rechazandoF2    = false;
         $this->obsRechazoF2    = '';
+        $this->rechazandoDomicilio = false;
+        $this->obsRechazoDomicilio = '';
     }
 
     /* ── APROBAR / RECHAZAR F2 ────────────────────────────────────── */
@@ -336,6 +357,62 @@ new class extends Component {
         $this->setMensaje('ok', 'F2 rechazado.');
     }
 
+    /* ── APROBAR / RECHAZAR DOMICILIO (DNI) ───────────────────────── */
+    // Usa el mismo campo que gestionar-docentes.blade.php (tb_domicilio.tipoestado_id)
+    // para que el estado quede sincronizado entre ambas pantallas.
+    public function aprobarDomicilio(): void
+    {
+        if (!$this->docDomicilio) return;
+
+        DB::table('tb_domicilio')
+            ->where('idtb_domicilio', $this->docDomicilio->idtb_domicilio)
+            ->update([
+                'tipoestado_id'            => 2, // Aprobado
+                'observacion_verificacion' => null,
+                'verificado_at'            => now(),
+            ]);
+
+        $this->docDomicilio = $this->buscarDomicilio($this->docDomicilio->idtb_domicilio);
+        $this->setMensaje('ok', 'DNI/domicilio aprobado correctamente.');
+    }
+
+    public function iniciarRechazoDomicilio(): void
+    {
+        $this->rechazandoDomicilio = true;
+        $this->obsRechazoDomicilio = '';
+    }
+
+    public function cancelarRechazoDomicilio(): void
+    {
+        $this->rechazandoDomicilio = false;
+        $this->obsRechazoDomicilio = '';
+    }
+
+    public function confirmarRechazoDomicilio(): void
+    {
+        if (!$this->docDomicilio) return;
+
+        $this->validate([
+            'obsRechazoDomicilio' => 'required|min:3|max:255',
+        ], [
+            'obsRechazoDomicilio.required' => 'Indicá el motivo del rechazo (ej: "DNI ilegible").',
+            'obsRechazoDomicilio.min'      => 'El motivo debe tener al menos 3 caracteres.',
+        ]);
+
+        DB::table('tb_domicilio')
+            ->where('idtb_domicilio', $this->docDomicilio->idtb_domicilio)
+            ->update([
+                'tipoestado_id'            => 3, // Rechazado
+                'observacion_verificacion' => $this->obsRechazoDomicilio,
+                'verificado_at'            => now(),
+            ]);
+
+        $this->rechazandoDomicilio = false;
+        $this->obsRechazoDomicilio = '';
+        $this->docDomicilio = $this->buscarDomicilio($this->docDomicilio->idtb_domicilio);
+        $this->setMensaje('ok', 'DNI/domicilio rechazado.');
+    }
+
     /* ── CERRAR PANEL ─────────────────────────────────────────────── */
     public function cerrarPanel(): void
     {
@@ -344,6 +421,11 @@ new class extends Component {
     }
     public function publicarLom(): void
     {
+        if ($this->llamadoAbierto) {
+            $this->setMensaje('err', 'No se puede publicar el LOM mientras el llamado esté abierto. Esperá a que cierre: pueden seguir inscribiéndose docentes.');
+            return;
+        }
+
         $lom = DB::table('tb_lom')->where('llamado_id', $this->llamadoId)->first();
 
         if (!$lom) {
@@ -660,7 +742,12 @@ new class extends Component {
                     Los <em>Pendientes</em> no aparecen en la publicación oficial.
                 </p>
                 <div class="flex gap-2">
-                    @if(!$lomExiste)
+                    @if($llamadoAbierto)
+                        <span class="flex items-center gap-1.5 px-3 py-2 text-[10px] font-bold text-amber-700 uppercase bg-amber-50 border border-amber-200 rounded-lg">
+                            <svg class="w-3.5 h-3.5 shrink-0" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M8.257 3.099c.765-1.36 2.72-1.36 3.486 0l6.517 11.59c.75 1.334-.213 2.98-1.743 2.98H3.483c-1.53 0-2.493-1.646-1.743-2.98l6.517-11.59zM11 14a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V7a1 1 0 00-1-1z" clip-rule="evenodd"/></svg>
+                            Llamado abierto: no se puede publicar todavía
+                        </span>
+                    @elseif(!$lomExiste)
          <span class="px-3 py-2 text-[10px] font-bold text-gray-400 uppercase italic">
              LOM no generado
          </span>
@@ -670,7 +757,7 @@ new class extends Component {
                     </span>
                 @else
                     <button wire:click="publicarLom"
-                        wire:confirm="¿Publicar el LOM con los inscriptos actuales (Habilitados + Sin Clasificar)?"
+                        wire:confirm="El llamado ya está cerrado. ¿Publicar el LOM con los inscriptos actuales (Habilitados + Sin Clasificar)?"
                         class="px-5 py-2 text-xs font-black text-white uppercase bg-indigo-600 hover:bg-indigo-700 rounded-lg transition">
                         Publicar LOM
                     </button>
@@ -809,15 +896,59 @@ new class extends Component {
                                     <span class="ml-1 text-[9px] px-1.5 py-0.5 rounded bg-slate-100 text-slate-600 font-bold uppercase">Zona {{ $zonaTexto }}</span>
                                 @endif
                             </div>
-                            <div class="px-3 py-2.5 rounded-lg border border-gray-100 bg-gray-50 flex items-center justify-between">
-                                <span class="text-xs font-semibold text-gray-600">DNI</span>
+                            <div class="px-3 py-2.5 rounded-lg border border-gray-100 bg-gray-50">
+                                <div class="flex items-center justify-between">
+                                    <span class="text-xs font-semibold text-gray-600">DNI</span>
+                                    @if($docDomicilio->archivo_dni)
+                                        <a href="{{ asset('storage/'.$docDomicilio->archivo_dni) }}" target="_blank"
+                                            class="text-[10px] font-black uppercase text-indigo-600 hover:text-indigo-800 underline">
+                                            Ver archivo
+                                        </a>
+                                    @else
+                                        <span class="text-[10px] font-black uppercase text-red-500 bg-red-50 px-2 py-0.5 rounded-full">Falta</span>
+                                    @endif
+                                </div>
+
                                 @if($docDomicilio->archivo_dni)
-                                    <a href="{{ asset('storage/'.$docDomicilio->archivo_dni) }}" target="_blank"
-                                        class="text-[10px] font-black uppercase text-indigo-600 hover:text-indigo-800 underline">
-                                        Ver archivo
-                                    </a>
-                                @else
-                                    <span class="text-[10px] font-black uppercase text-red-500 bg-red-50 px-2 py-0.5 rounded-full">Falta</span>
+                                    @php
+                                        $domEstado = (int) ($docDomicilio->tipoestado_id ?? 1);
+                                        $domClase  = match($domEstado) { 2 => 'bg-green-100 text-green-700', 3 => 'bg-red-100 text-red-700', 4 => 'bg-blue-100 text-blue-700', 5 => 'bg-slate-100 text-slate-700', default => 'bg-amber-100 text-amber-700' };
+                                        $domLabel  = match($domEstado) { 2 => 'Aprobado', 3 => 'Rechazado', 4 => 'Cambio de zona solicitado', 5 => 'Reemplazado', default => 'Pendiente' };
+                                    @endphp
+                                    <div class="mt-2 flex items-center gap-2 flex-wrap">
+                                        <span class="text-[10px] font-black uppercase px-2 py-0.5 rounded-full {{ $domClase }}">{{ $domLabel }}</span>
+
+                                        @if($domEstado === 1)
+                                            @if($rechazandoDomicilio)
+                                                <div class="w-full flex gap-1 items-start mt-1">
+                                                    <input wire:model="obsRechazoDomicilio" type="text" placeholder="Motivo del rechazo..."
+                                                        class="flex-1 border border-gray-300 rounded px-2 py-1 text-xs">
+                                                    <button wire:click="confirmarRechazoDomicilio"
+                                                        class="bg-red-600 hover:bg-red-700 text-white rounded px-2 py-1 text-[9px] font-black uppercase transition">
+                                                        Confirmar
+                                                    </button>
+                                                    <button wire:click="cancelarRechazoDomicilio"
+                                                        class="bg-gray-300 hover:bg-gray-400 text-gray-700 rounded px-2 py-1 text-[9px] font-black uppercase transition">
+                                                        ✕
+                                                    </button>
+                                                </div>
+                                                @error('obsRechazoDomicilio') <p class="text-red-500 text-[9px] mt-1 w-full">{{ $message }}</p> @enderror
+                                            @else
+                                                <button wire:click="aprobarDomicilio"
+                                                    class="bg-green-600 hover:bg-green-700 text-white rounded px-2 py-1 text-[9px] font-black uppercase transition">
+                                                    Aprobar
+                                                </button>
+                                                <button wire:click="iniciarRechazoDomicilio"
+                                                    class="bg-red-500 hover:bg-red-600 text-white rounded px-2 py-1 text-[9px] font-black uppercase transition">
+                                                    Rechazar
+                                                </button>
+                                            @endif
+                                        @endif
+                                    </div>
+
+                                    @if(!empty($docDomicilio->observacion_verificacion))
+                                        <p class="mt-1 text-[10px] text-red-600 italic">Motivo: {{ $docDomicilio->observacion_verificacion }}</p>
+                                    @endif
                                 @endif
                             </div>
                             <div class="px-3 py-2.5 rounded-lg border border-gray-100 bg-gray-50 flex items-center justify-between">

@@ -320,6 +320,7 @@
             <th style="width:55%">Título</th>
             <th style="width:30%">Institución</th>
             <th style="width:15%; text-align:center">Año egreso</th>
+             <th style="width:15%; text-align:center">N° Registro</th>
         </tr>
     </thead>
     <tbody>
@@ -328,6 +329,7 @@
             <td>{{ $tit->nombre_titulo }}</td>
             <td>{{ $tit->institucion ?? '—' }}</td>
             <td style="text-align:center">{{ $tit->anio_egreso ?? '—' }}</td>
+            <td style="text-align:center">{{ $tit->num_registro ?? '—' }}</td>
         </tr>
         @endforeach
     </tbody>
@@ -344,7 +346,7 @@
         <tr>
             <th style="width:50%">Certificado</th>
             <th style="width:30%">Tipo</th>
-            <th style="width:20%; text-align:center">Año</th>
+            
         </tr>
     </thead>
     <tbody>
@@ -352,7 +354,7 @@
         <tr>
             <td>{{ $cert->nombre_certificado }}</td>
             <td>{{ $cert->tipo ?? '—' }}</td>
-            <td style="text-align:center">{{ $cert->anio ?? '—' }}</td>
+           
         </tr>
         @endforeach
     </tbody>

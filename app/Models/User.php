@@ -12,7 +12,7 @@ use Illuminate\Notifications\Notifiable;
 use Illuminate\Support\Str;
 use Laravel\Fortify\TwoFactorAuthenticatable;
 
-#[Fillable(['name', 'email', 'password'])]
+#[Fillable(['name', 'email', 'password', 'rol_id'])]
 #[Hidden(['password', 'two_factor_secret', 'two_factor_recovery_codes', 'remember_token'])]
 class User extends Authenticatable
 {
@@ -43,4 +43,17 @@ class User extends Authenticatable
             ->map(fn ($word) => Str::substr($word, 0, 1))
             ->implode('');
     }
+      public function rol()
+    {
+        return $this->belongsTo(\App\Models\Rol::class, 'rol_id');
+    }
+ 
+    /**
+     * true si el usuario es super_admin.
+     */
+    public function esSuperAdmin(): bool
+    {
+        return $this->rol?->nombre_rol === 'super_admin';
+    }
+ 
 }

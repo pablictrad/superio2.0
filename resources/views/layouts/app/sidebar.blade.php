@@ -52,6 +52,15 @@
                  <flux:sidebar.item icon="plus" :href="route('admin.docentes')" :current="request()->routeIs('admin.docentes')" wire:navigate>
                         {{ __('Gestionar Docentes') }}
                 </flux:sidebar.item> 
+            @if(auth()->user()?->esSuperAdmin())
+                <flux:sidebar.item icon="chart-bar" :href="route('admin.dashboard')" :current="request()->routeIs('admin.dashboard')" wire:navigate>
+                    {{ __('admin.dashboard') }}
+                </flux:sidebar.item>
+
+                <flux:sidebar.item icon="shield-check" :href="route('admin.auditoria')" :current="request()->routeIs('admin.auditoria')" wire:navigate>
+                    {{ __('admin.auditoria') }}
+                </flux:sidebar.item>
+            @endif
             </flux:sidebar.nav>
 
             <flux:spacer />

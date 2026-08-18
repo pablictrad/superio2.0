@@ -4,6 +4,7 @@ use Livewire\Volt\Component;
 use Livewire\WithPagination;
 use Livewire\Attributes\Computed;
 use Illuminate\Support\Facades\DB;
+use App\Support\Auditoria;
 
 /**
  * gestionar-docentes.blade.php
@@ -352,6 +353,14 @@ new class extends Component {
             ]),
             default => null,
         };
+
+        $accion = match ($estadoId) {
+            2 => "aprobar_{$tipo}",
+            3 => "rechazar_{$tipo}",
+            default => "actualizar_{$tipo}",
+        };
+
+        Auditoria::registrar($accion, $tipo, $id, $observacion);
     }
 }; ?>
 
