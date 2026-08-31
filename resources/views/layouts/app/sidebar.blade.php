@@ -1,10 +1,9 @@
 <!DOCTYPE html>
-<html lang="{{ str_replace('_', '-', app()->getLocale()) }}" class="dark">
+<html lang="{{ str_replace('_', '-', app()->getLocale()) }}">
     <head>
         @include('partials.head')
-        @vite(['resources/css/app.css', 'resources/js/app.js'])
     </head>
-    <body class="min-h-screen bg-white dark:bg-zinc-800">
+  <body class="min-h-screen bg-white dark:bg-zinc-800">
         <flux:sidebar sticky collapsible="mobile" class="border-e border-zinc-200 bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-900">
             <flux:sidebar.header>
                 <x-app-logo :sidebar="true" href="{{ route('dashboard') }}" wire:navigate />
@@ -61,6 +60,7 @@
                     {{ __('admin.auditoria') }}
                 </flux:sidebar.item>
             @endif
+                
             </flux:sidebar.nav>
 
             <flux:spacer />
@@ -74,7 +74,13 @@
                     {{ __('Documentation') }}
                 </flux:sidebar.item>
             </flux:sidebar.nav> -->
-
+                <div class="px-2 pb-2">
+                    <flux:radio.group variant="segmented" size="sm" x-data x-model="$flux.appearance" class="w-full">
+                        <flux:radio value="light" icon="sun" />
+                        <flux:radio value="dark" icon="moon" />
+                        <flux:radio value="system" icon="computer-desktop" />
+                    </flux:radio.group>
+                </div>
             @if(auth()->check())
                 <x-desktop-user-menu
                     class="hidden lg:block"
@@ -97,19 +103,11 @@
 
                 <flux:menu>
                     <flux:menu.radio.group>
-                        <div class="p-0 text-sm font-normal">
-                            <div class="flex items-center gap-2 px-1 py-1.5 text-start text-sm">
-                                <flux:avatar
-                                    :name="auth()->user()->name"
-                                    :initials="auth()->user()->initials()"
-                                />
-
-                                <div class="grid flex-1 text-start text-sm leading-tight">
-                                    <flux:heading class="truncate">{{ auth()->user()->name }}</flux:heading>
-                                    <flux:text class="truncate">{{ auth()->user()->email }}</flux:text>
-                                </div>
-                            </div>
-                        </div>
+                        <flux:radio.group variant="segmented" size="sm" x-data x-model="$flux.appearance">
+                            <flux:radio value="light" icon="sun" />
+                            <flux:radio value="dark" icon="moon" />
+                            <flux:radio value="system" icon="computer-desktop" />
+                        </flux:radio.group>
                     </flux:menu.radio.group>
 
                     <flux:menu.separator />

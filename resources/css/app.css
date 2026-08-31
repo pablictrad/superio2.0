@@ -23,27 +23,34 @@
     --color-zinc-900: #171717;
     --color-zinc-950: #0a0a0a;
 
-    --color-accent: var(--color-neutral-800);
-    --color-accent-content: var(--color-neutral-800);
-    --color-accent-foreground: var(--color-white);
+    --color-accent: #262626;
+    --color-accent-content: #262626;
+    --color-accent-foreground: #ffffff;
 }
 
 @layer theme {
     .dark {
-        --color-accent: var(--color-white);
-        --color-accent-content: var(--color-white);
-        --color-accent-foreground: var(--color-neutral-800);
+        --color-accent: #ffffff;
+        --color-accent-content: #ffffff;
+        --color-accent-foreground: #262626;
     }
 }
 
 @layer base {
-
+  body {
+        color: #171717;
+        background-color: #ffffff;
+    }
+    html.dark body {
+        color: #f5f5f5;
+        background-color: #262626;
+    }
     *,
     ::after,
     ::before,
     ::backdrop,
     ::file-selector-button {
-        border-color: var(--color-gray-200, currentColor);
+      border-color: var(--color-zinc-200, currentColor);
     }
 }
 

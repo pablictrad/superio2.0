@@ -116,7 +116,7 @@ new class extends Component {
         'Capacitación',
         'Certificado de Servicio',
         'Concepto Anual',
-        'Postíttulos(Actualización, especialización, maestría, doctorado...)',
+        'Postíttulos',
         'Otro',
     ];
 
@@ -928,9 +928,7 @@ new class extends Component {
                             inputmode="numeric"
                             maxlength="9"
                             placeholder="Ej: 28564343"
-                            class="w-full border-2 border-gray-300 rounded-xl px-4 py-3 text-lg font-black text-center tracking-widest
-                                   focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 transition
-                                   @error('dniBusqueda') border-red-400 bg-red-50 @enderror"
+                            class="w-full border-2 border-gray-300 rounded-xl px-4 py-3 text-lg font-black text-center tracking-widest bg-white text-gray-900 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 transition  @error('dniBusqueda') border-red-400 bg-red-50 @enderror"
                             autofocus
                         >
                     </div>
@@ -1013,7 +1011,7 @@ new class extends Component {
                         Apellido <span class="text-red-500">*</span>
                     </label>
                     <input wire:model="apellido" type="text" placeholder="Ingrese su apellido"
-                        class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-400 focus:border-indigo-400 transition
+                        class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm bg-white text-gray-900 focus:ring-2 focus:ring-indigo-400 focus:border-indigo-400 transition
                                @error('apellido') border-red-400 bg-red-50 @enderror">
                     @error('apellido') <p class="mt-1 text-xs text-red-600 font-medium">{{ $message }}</p> @enderror
                 </div>
@@ -1024,7 +1022,7 @@ new class extends Component {
                         Nombre/s <span class="text-red-500">*</span>
                     </label>
                     <input wire:model="nombre" type="text" placeholder="Ingrese su nombre completo"
-                        class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-400 focus:border-indigo-400 transition
+                        class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm bg-white text-gray-900 focus:ring-2 focus:ring-indigo-400 focus:border-indigo-400 transition
                                @error('nombre') border-red-400 bg-red-50 @enderror">
                     @error('nombre') <p class="mt-1 text-xs text-red-600 font-medium">{{ $message }}</p> @enderror
                 </div>
@@ -1037,7 +1035,7 @@ new class extends Component {
                     <input wire:model="dni" type="text" maxlength="9" placeholder="28564343"
                         {{ $docenteExiste ? 'readonly' : '' }}
                         class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm font-mono font-bold
-                               {{ $docenteExiste ? 'bg-gray-100 text-gray-500 cursor-not-allowed' : 'focus:ring-2 focus:ring-indigo-400 focus:border-indigo-400' }}
+                               {{ $docenteExiste ? 'bg-white text-gray-900 cursor-not-allowed' : ' bg-white text-gray-900 focus:ring-2 focus:ring-indigo-400 focus:border-indigo-400' }}
                                transition @error('dni') border-red-400 bg-red-50 @enderror">
                     @error('dni') <p class="mt-1 text-xs text-red-600 font-medium">{{ $message }}</p> @enderror
                 </div>
@@ -1048,7 +1046,7 @@ new class extends Component {
                         Teléfono
                     </label>
                     <input wire:model="telefono" type="text" placeholder="3804-123456"
-                        class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-400 focus:border-indigo-400 transition">
+                        class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm  bg-white text-gray-900 focus:ring-2 focus:ring-indigo-400 focus:border-indigo-400 transition">
                 </div>
 
                 {{-- Email --}}
@@ -1057,7 +1055,7 @@ new class extends Component {
                         Correo Electrónico
                     </label>
                     <input wire:model="email" type="email" placeholder="ejemplo@correo.com"
-                        class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-400 focus:border-indigo-400 transition
+                        class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm bg-white text-gray-900 focus:ring-2 focus:ring-indigo-400 focus:border-indigo-400 transition
                                @error('email') border-red-400 bg-red-50 @enderror">
                     @error('email') <p class="mt-1 text-xs text-red-600 font-medium">{{ $message }}</p> @enderror
                 </div>
@@ -1070,15 +1068,15 @@ new class extends Component {
                         Domicilio y Localidad
                     </label>
                     @if($domicilioExistente && $domicilioAprobado && !$solicitandoCambioZona)
-                        <span class="text-[10px] font-black uppercase text-gray-400 bg-gray-100 px-2 py-0.5 rounded-full">
+                        <span class="text-[10px] font-black uppercase  bg-white text-gray-900 px-2 py-0.5 rounded-full">
                             🔒 Registrado
                         </span>
                     @elseif($domicilioExistente && !$domicilioAprobado && !$solicitandoCambioZona)
-                        <span class="text-[10px] font-black uppercase text-amber-600 bg-amber-50 px-2 py-0.5 rounded-full">
+                        <span class="text-[10px] font-black uppercase text-amber-600 bg-white text-gray-900 px-2 py-0.5 rounded-full">
                             Pendiente de aprobación — puede corregirlo
                         </span>
                     @elseif($solicitandoCambioZona)
-                        <span class="text-[10px] font-black uppercase text-amber-600 bg-amber-50 px-2 py-0.5 rounded-full">
+                        <span class="text-[10px] font-black uppercase  bg-white text-gray-900 px-2 py-0.5 rounded-full">
                             Nuevo domicilio propuesto
                         </span>
                     @endif
@@ -1089,28 +1087,28 @@ new class extends Component {
                     <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 text-sm">
                         <div class="sm:col-span-3">
                             <span class="block text-[10px] font-bold text-gray-400 uppercase">Localidad</span>
-                            <span class="text-gray-700 font-medium">
+                            <span class=" bg-white text-gray-900 font-medium">
                                 {{ $localidad ?: '—' }}
                                 @if($zonaTexto)
-                                    <span class="text-xs text-gray-400 font-normal">(Zona {{ $zonaTexto }})</span>
+                                    <span class="text-xs  bg-white text-gray-900 font-normal">(Zona {{ $zonaTexto }})</span>
                                 @endif
                             </span>
                         </div>
                         <div class="sm:col-span-2">
                             <span class="block text-[10px] font-bold text-gray-400 uppercase">Calle</span>
-                            <span class="text-gray-700">{{ $calle ?: '—' }} {{ $numcasapiso }}</span>
+                            <span class=" bg-white text-gray-900">{{ $calle ?: '—' }} {{ $numcasapiso }}</span>
                         </div>
                         <div>
                             <span class="block text-[10px] font-bold text-gray-400 uppercase">Piso/Depto</span>
-                            <span class="text-gray-700">{{ $piso ?: '—' }}</span>
+                            <span class=" bg-white text-gray-900">{{ $piso ?: '—' }}</span>
                         </div>
                         <div class="sm:col-span-2">
                             <span class="block text-[10px] font-bold text-gray-400 uppercase">Barrio</span>
-                            <span class="text-gray-700">{{ $barrio ?: '—' }}</span>
+                            <span class=" bg-white text-gray-900">{{ $barrio ?: '—' }}</span>
                         </div>
                         <div>
                             <span class="block text-[10px] font-bold text-gray-400 uppercase">Manzana</span>
-                            <span class="text-gray-700">{{ $manzana ?: '—' }}</span>
+                            <span class=" bg-white text-gray-900">{{ $manzana ?: '—' }}</span>
                         </div>
                     </div>
 
@@ -1138,11 +1136,11 @@ new class extends Component {
                                 </p>
                             </div>
                             @endif
-                            <label class="block text-[10px] font-bold text-gray-500 mb-1 uppercase">
+                            <label class="block text-[10px] font-bold  bg-white text-gray-900 mb-1 uppercase">
                                 Localidad <span class="text-red-500">*</span>
                             </label>
                             <select wire:model.live="localidadId"
-                                class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-400 focus:border-indigo-400 transition
+                                class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm  bg-white text-gray-900 focus:ring-2 focus:ring-indigo-400 focus:border-indigo-400 transition
                                        @error('localidadId') border-red-400 bg-red-50 @enderror">
                                 <option value="">Seleccione su localidad...</option>
                                 @foreach(DB::table('tb_localidades')->orderBy('localidad')->get() as $loc)
@@ -1153,11 +1151,11 @@ new class extends Component {
                         </div>
                         
                                 <div class="sm:col-span-2">
-                            <label class="block text-[10px] font-bold text-gray-500 mb-1 uppercase">
+                            <label class="block text-[10px] font-bold  bg-white text-gray-900 mb-1 uppercase">
                                 Calle <span class="text-red-500">*</span>
                             </label>
                             <input wire:model="calle" type="text" placeholder="Ej: Av. Ortiz de Ocampo"
-                                class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-400 focus:border-indigo-400 transition
+                                class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm bg-white text-gray-900 focus:ring-2 focus:ring-indigo-400 focus:border-indigo-400 transition
                                        @error('calle') border-red-400 bg-red-50 @enderror">
                             @error('calle') <p class="mt-1 text-xs text-red-600 font-medium">{{ $message }}</p> @enderror
                         </div>
@@ -1166,7 +1164,7 @@ new class extends Component {
                                 N° Casa <span class="text-red-500">*</span>
                             </label>
                             <input wire:model="numcasapiso" type="text" placeholder="1700"
-                                class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-400 focus:border-indigo-400 transition
+                                class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm  bg-white text-gray-900 focus:ring-2 focus:ring-indigo-400 focus:border-indigo-400 transition
                                        @error('numcasapiso') border-red-400 bg-red-50 @enderror">
                             @error('numcasapiso') <p class="mt-1 text-xs text-red-600 font-medium">{{ $message }}</p> @enderror
                         </div>
@@ -1176,14 +1174,14 @@ new class extends Component {
                                 Piso/Depto <span class="text-gray-400 normal-case">(opcional)</span>
                             </label>
                             <input wire:model="piso" type="text" placeholder="3B"
-                                class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-400 focus:border-indigo-400 transition">
+                                class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm  bg-white text-gray-900 focus:ring-2 focus:ring-indigo-400 focus:border-indigo-400 transition">
                         </div>
                         <div class="sm:col-span-2">
                             <label class="block text-[10px] font-bold text-gray-500 mb-1 uppercase">
                                 Barrio <span class="text-red-500">*</span>
                             </label>
                             <input wire:model="barrio" type="text" placeholder="Ej: Evita"
-                                class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-400 focus:border-indigo-400 transition
+                                class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm bg-white text-gray-900 focus:ring-2 focus:ring-indigo-400 focus:border-indigo-400 transition
                                        @error('barrio') border-red-400 bg-red-50 @enderror">
                             @error('barrio') <p class="mt-1 text-xs text-red-600 font-medium">{{ $message }}</p> @enderror
                         </div>
@@ -1193,7 +1191,7 @@ new class extends Component {
                                 Manzana <span class="text-gray-400 normal-case">(opcional)</span>
                             </label>
                             <input wire:model="manzana" type="text" placeholder="Ej: Mz 14"
-                                class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-400 focus:border-indigo-400 transition">
+                                class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm bg-white text-gray-900 focus:ring-2 focus:ring-indigo-400 focus:border-indigo-400 transition">
                         </div>
                     </div>
 
@@ -1245,7 +1243,7 @@ new class extends Component {
                             Adjuntar F2 firmado (PDF, máx. 5MB)
                         </label>
                         <input type="file" wire:model="archivoF2" accept=".pdf"
-                            class="w-full border border-indigo-300 rounded-lg text-xs p-2 bg-white shadow-sm">
+                            class="w-full border border-indigo-300 rounded-lg text-xs p-2  bg-white text-gray-900 shadow-sm">
                         <div wire:loading wire:target="archivoF2" class="text-xs text-indigo-500 mt-1">Subiendo...</div>
                         @error('archivoF2') <p class="mt-1 text-xs text-red-600 font-bold">{{ $message }}</p> @enderror
                         @if($archivoF2)
@@ -1267,7 +1265,7 @@ new class extends Component {
                             {{ $dniPathExistente ? 'Reemplazar DNI (opcional)' : 'Adjuntar DNI (PDF/JPG/PNG, máx. 10MB)' }}
                         </label>
                         <input type="file" wire:model="archivoDni" accept=".pdf,.jpg,.jpeg,.png"
-                            class="w-full border border-indigo-300 rounded-lg text-xs p-2 bg-white shadow-sm">
+                            class="w-full border border-indigo-300 rounded-lg text-xs p-2  bg-white text-gray-900 shadow-sm">
                         <div wire:loading wire:target="archivoDni" class="text-xs text-indigo-500 mt-1">Subiendo...</div>
                         @error('archivoDni') <p class="mt-1 text-xs text-red-600 font-bold">{{ $message }}</p> @enderror
                     </div>
@@ -1291,7 +1289,7 @@ new class extends Component {
                                     {{ $facturaPathExistente ? 'Reemplazar factura (opcional)' : 'Factura de servicios / contrato' }}
                                 </label>
                                 <input type="file" wire:model="archivoFactura" accept=".pdf,.jpg,.jpeg,.png"
-                                    class="w-full border border-indigo-300 rounded-lg text-xs p-2 bg-white shadow-sm">
+                                    class="w-full border border-indigo-300 rounded-lg text-xs p-2 bg-white shadow-sm text-gray-900">
                                 <div wire:loading wire:target="archivoFactura" class="text-xs text-indigo-500 mt-1">Subiendo...</div>
                                 @if($facturaPathExistente)<p class="mt-1 text-xs text-green-600 font-bold">✓ Ya tiene cargado</p>@endif
                             </div>
@@ -1301,7 +1299,7 @@ new class extends Component {
                                     {{ $certifDomicilioPathExistente ? 'Reemplazar certificado (opcional)' : 'Certificado de domicilio' }}
                                 </label>
                                 <input type="file" wire:model="archivoCertifDomicilio" accept=".pdf,.jpg,.jpeg,.png"
-                                    class="w-full border border-indigo-300 rounded-lg text-xs p-2 bg-white shadow-sm">
+                                    class="w-full border border-indigo-300 rounded-lg text-xs p-2 bg-white text-gray-900 shadow-sm">
                                 <div wire:loading wire:target="archivoCertifDomicilio" class="text-xs text-indigo-500 mt-1">Subiendo...</div>
                                 @if($certifDomicilioPathExistente)<p class="mt-1 text-xs text-green-600 font-bold">✓ Ya tiene cargado</p>@endif
                             </div>
@@ -1367,7 +1365,7 @@ new class extends Component {
                                     </label>
                                     <input wire:model="nuevoTituloNombre" type="text"
                                         placeholder="Ej: Profesor de Matemática, Lic. en Ciencias de la Educación"
-                                        class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-400 focus:border-indigo-400 transition
+                                        class="w-full border border-gray-300 rounded-lg px-3 py-2 text-smbg-white  bg-white text-gray-900 focus:ring-2 focus:ring-indigo-400 focus:border-indigo-400 transition
                                                @error('nuevoTituloNombre') border-red-400 bg-red-50 @enderror">
                                     <p class="text-[9px] text-gray-400 mt-0.5">Escríbalo exactamente como figura en el título. Se usará para evitar duplicados.</p>
                                     @error('nuevoTituloNombre') <p class="mt-1 text-xs text-red-600 font-medium">{{ $message }}</p> @enderror
@@ -1375,21 +1373,21 @@ new class extends Component {
                                 <div class="sm:col-span-2">
                                     <label class="block text-[10px] font-black text-gray-500 mb-1 uppercase">Institución</label>
                                     <input wire:model="nuevoTituloInstitucion" type="text" placeholder="Ej: UNLaR"
-                                        class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-400 focus:border-indigo-400 transition">
+                                        class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm bg-white text-gray-900 focus:ring-2 focus:ring-indigo-400 focus:border-indigo-400 transition">
                                 </div>
                                 <div class="sm:col-span-4">
                                     <label class="block text-[10px] font-black text-gray-500 mb-1 uppercase">
                                         Año de egreso <span class="text-red-500">*</span>
                                     </label>
                                     <input wire:model="nuevoTituloAnio" type="number" min="1950" max="{{ date('Y') }}" placeholder="{{ date('Y') }}"
-                                        class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-400 focus:border-indigo-400 transition
+                                        class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm bg-white text-gray-900 focus:ring-2 focus:ring-indigo-400 focus:border-indigo-400 transition
                                                @error('nuevoTituloAnio') border-red-400 bg-red-50 @enderror">
                                     @error('nuevoTituloAnio') <p class="mt-1 text-xs text-red-600 font-medium">{{ $message }}</p> @enderror
                                     <label class="block text-[10px] font-black text-gray-500 mb-1 uppercase">
                                        N° de Registro Provincial <span class="text-red-500">*</span>
                                     </label>
                                      <input wire:model="nuevoTituloRegistro" type="number"  placeholder="ingrese el número de registro del título"
-                                        class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-400 focus:border-indigo-400 transition
+                                        class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm bg-white text-gray-900 focus:ring-2 focus:ring-indigo-400 focus:border-indigo-400 transition
                                                @error('nuevoTituloRegistro') border-red-400 bg-red-50 @enderror">
                                     @error('nuevoTituloRegistro') <p class="mt-1 text-xs text-red-600 font-medium">{{ $message }}</p> @enderror
                                 </div>
@@ -1404,7 +1402,7 @@ new class extends Component {
                                     </label>
                                     <input type="file" wire:model="nuevoTituloArchivo" accept=".pdf,.jpg,.jpeg,.png"
                                         x-on:change="archivoPendiente = $event.target.files.length > 0"
-                                        class="w-full border border-gray-300 rounded-lg text-xs p-2 bg-white shadow-sm
+                                        class="w-full border border-gray-300 rounded-lg text-xs p-2 bg-white text-gray-900 shadow-sm
                                                @error('nuevoTituloArchivo') border-red-400 bg-red-50 @enderror">
                                     <div wire:loading wire:target="nuevoTituloArchivo" class="text-xs text-indigo-500 mt-1">Subiendo archivo...</div>
                                     @error('nuevoTituloArchivo') <p class="mt-1 text-xs text-red-600 font-medium">{{ $message }}</p> @enderror
@@ -1544,7 +1542,7 @@ new class extends Component {
                                     </label>
                                     <input wire:model="nuevoCertNombre" type="text"
                                         placeholder="Ej: Capacitación en TIC para docentes — MEC 2023"
-                                        class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-teal-400 focus:border-teal-400 transition
+                                        class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm  bg-white text-gray-900 focus:ring-2 focus:ring-teal-400 focus:border-teal-400 transition
                                                @error('nuevoCertNombre') border-red-400 bg-red-50 @enderror">
                                     <p class="text-[9px] text-gray-400 mt-0.5">Escríbalo exactamente como figura en el certificado.</p>
                                     @error('nuevoCertNombre') <p class="mt-1 text-xs text-red-600 font-medium">{{ $message }}</p> @enderror
@@ -1554,7 +1552,7 @@ new class extends Component {
                                         Tipo (categoría) <span class="text-red-500">*</span>
                                     </label>
                                     <select wire:model="nuevoCertTipo"
-                                        class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-teal-400 focus:border-teal-400 transition
+                                        class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm  bg-white text-gray-900 focus:ring-2 focus:ring-teal-400 focus:border-teal-400 transition
                                                @error('nuevoCertTipo') border-red-400 bg-red-50 @enderror">
                                         <option value="">Seleccione...</option>
                                         @foreach($tiposCert as $tipo)
@@ -1568,7 +1566,7 @@ new class extends Component {
                                         Año <span class="text-red-500">*</span>
                                     </label>
                                     <input wire:model="nuevoCertAnio" type="number" min="1950" max="{{ date('Y') }}" placeholder="{{ date('Y') }}"
-                                        class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-teal-400 focus:border-teal-400 transition
+                                        class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm  bg-white text-gray-900 focus:ring-2 focus:ring-teal-400 focus:border-teal-400 transition
                                                @error('nuevoCertAnio') border-red-400 bg-red-50 @enderror">
                                     @error('nuevoCertAnio') <p class="mt-1 text-xs text-red-600 font-medium">{{ $message }}</p> @enderror
                                 </div> -->
@@ -1578,7 +1576,7 @@ new class extends Component {
                                     </label>
                                     <input type="file" wire:model="nuevoCertArchivo" accept=".pdf,.jpg,.jpeg,.png"
                                         x-on:change="archivoPendiente = $event.target.files.length > 0"
-                                        class="w-full border border-gray-300 rounded-lg text-xs p-2 bg-white shadow-sm">
+                                        class="w-full border border-gray-300 rounded-lg text-xs p-2 bg-white text-gray-900 shadow-sm">
                                     <div wire:loading wire:target="nuevoCertArchivo" class="text-xs text-teal-500 mt-1">Subiendo archivo...</div>
                                     @error('nuevoCertArchivo') <p class="mt-1 text-xs text-red-600 font-medium">{{ $message }}</p> @enderror
 
@@ -1752,14 +1750,14 @@ new class extends Component {
                     $tieneAlgunCert   = count($certExistentes) + count($certPendientes) > 0;
                 @endphp
                 <p class="text-[10px] {{ $tieneAlgunTitulo ? 'text-gray-400' : 'text-red-500 font-bold' }} mr-2">
-                    {{ $tieneAlgunTitulo ? 'Certificados opcionales.' : 'Debe agregar al menos un título para continuar.' }}
+                    {{ $tieneAlgunTitulo ? 'Antecedentes opcionales.' : 'Debe agregar al menos un título para continuar.' }}
                 </p>
                 <button wire:click="inscribirse"
                     wire:key="btn-inscribirse-{{ $tieneAlgunCert ? 'con-cert' : 'sin-cert' }}"
                     wire:loading.attr="disabled"
                     wire:target="inscribirse"
                     @if(!$tieneAlgunTitulo) disabled @endif
-                    @if(!$tieneAlgunCert) wire:confirm="No cargó ningún certificado. ¿Está seguro de que quiere inscribirse sin certificados?" @endif
+                    @if(!$tieneAlgunCert) wire:confirm="No cargó ningún antecedente. ¿Está seguro de que quiere inscribirse sin Antecedentes?" @endif
                     class="bg-green-600 hover:bg-green-700 text-white font-black px-6 py-2.5 rounded-xl text-sm uppercase shadow-md transition disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-2">
                     <span wire:loading.remove wire:target="inscribirse">
                         <svg class="w-4 h-4 inline mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">

@@ -568,9 +568,9 @@ new class extends Component {
 
                 <flux:separator />
 
-                {{-- ── CERTIFICADOS ──────────────────────────────────────── --}}
+                {{-- ── ANTecedentes ──────────────────────────────────────── --}}
                 <div>
-                    <flux:heading size="sm" class="mb-2">Certificados</flux:heading>
+                    <flux:heading size="sm" class="mb-2">Antecedentes</flux:heading>
                     @forelse ($this->certificados as $cert)
                         <div class="rounded-lg border p-3 mb-2 {{ $cert->estado_id == 2 ? 'border-green-200 bg-green-50/30' : ($cert->estado_id == 3 ? 'border-red-200 bg-red-50/30' : 'border-gray-200') }}">
                             <div class="flex items-center justify-between">
