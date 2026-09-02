@@ -327,6 +327,15 @@
                         </svg>
                         Ver LOM
                     </a>
+
+                    <a href="{{ route('trayecto.registro') }}" class="btn-lom">
+                        {{-- Ícono birrete/graduación --}}
+                        <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                            <path d="M22 10L12 5 2 10l10 5 10-5z"/>
+                            <path d="M6 12v5c0 1.5 3 3 6 3s6-1.5 6-3v-5"/>
+                        </svg>
+                        Trayecto Formativo
+                    </a>
                 </div>
             </div>
 

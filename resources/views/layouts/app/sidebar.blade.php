@@ -50,7 +50,13 @@
                 </flux:sidebar.item>   
                  <flux:sidebar.item icon="plus" :href="route('admin.docentes')" :current="request()->routeIs('admin.docentes')" wire:navigate>
                         {{ __('Gestionar Docentes') }}
-                </flux:sidebar.item> 
+                </flux:sidebar.item>
+                <flux:sidebar.item icon="academic-cap" :href="route('admin.trayecto')" :current="request()->routeIs('admin.trayecto')" wire:navigate>
+                        {{ __('Trayecto Formativo') }}
+                </flux:sidebar.item>
+                <flux:sidebar.item icon="building-library" :href="route('admin.trayecto.instituciones')" :current="request()->routeIs('admin.trayecto.instituciones')" wire:navigate>
+                        {{ __('Trayecto - Instituciones') }}
+                </flux:sidebar.item>
             @if(auth()->user()?->esSuperAdmin())
                 <flux:sidebar.item icon="chart-bar" :href="route('admin.dashboard')" :current="request()->routeIs('admin.dashboard')" wire:navigate>
                     {{ __('admin.dashboard') }}

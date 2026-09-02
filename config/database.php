@@ -64,6 +64,24 @@ return [
             ]) : [],
         ],
 
+        // Conexión TEMPORAL de solo lectura al MySQL de Sage, usada únicamente por el
+        // comando `trayecto:migrar-legacy` (import de datos históricos del Trayecto
+        // Formativo). bdsuperior y sage viven en el mismo servidor, por eso alcanza con
+        // una sola conexión y se referencian las tablas de "sage" con el prefijo de base
+        // (sage.tb_agentes) dentro de la consulta. Se puede quitar este bloque (y las
+        // variables SAGE_MYSQL_* del .env) una vez completada la migración de datos.
+        'sage_mysql' => [
+            'driver'   => 'mysql',
+            'host'     => env('SAGE_MYSQL_HOST', '127.0.0.1'),
+            'port'     => env('SAGE_MYSQL_PORT', '3306'),
+            'database' => env('SAGE_MYSQL_DATABASE', 'bdsuperior'),
+            'username' => env('SAGE_MYSQL_USERNAME', 'root'),
+            'password' => env('SAGE_MYSQL_PASSWORD', ''),
+            'charset'  => 'utf8mb4',
+            'collation' => 'utf8mb4_unicode_ci',
+            'prefix'   => '',
+        ],
+
         'mariadb' => [
             'driver' => 'mariadb',
             'url' => env('DB_URL'),

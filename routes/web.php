@@ -73,12 +73,27 @@ Route::middleware(['auth', 'verified'])->group(function () {
 
     Volt::route('/admin/dashboard', 'pages.admin.dashboard.dashboard')
         ->name('admin.dashboard');
+
+    // Trayecto Formativo (admin)
+    Volt::route('/admin/trayecto', 'pages.admin.trayecto.gestionar-trayecto')
+        ->name('admin.trayecto');
+
+    Volt::route('/admin/trayecto/instituciones', 'pages.admin.trayecto.gestionar-instituciones-trayecto')
+        ->name('admin.trayecto.instituciones');
 });
  
 // PUBLICAS
 
 Volt::route('/publico', 'pages.admin.llamados.publico')
     ->name('admin.llamados.publico');
+
+// Trayecto Formativo (público, sin login, búsqueda/alta por DNI)
+Volt::route('/trayecto/registrar', 'pages.publico.trayecto-formativo')
+    ->name('trayecto.registro');
+
+Route::get('/trayecto/constancia/{dni}/{cohorte}', [App\Http\Controllers\TrayectoConstanciaController::class, 'descargar'])
+    ->where(['dni' => '[0-9]+', 'cohorte' => '[0-9]+'])
+    ->name('trayecto.constancia.descargar');
 
     // LOM
 
