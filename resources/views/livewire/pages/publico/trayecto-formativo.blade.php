@@ -798,7 +798,8 @@ new #[Layout('layouts.publico')] class extends Component {
                     'concepto'               => ['label' => 'Concepto elevado por la institución', 'file' => 'archivoConcepto'],
                 ] as $tipo => $cfg)
                     @php
-                        $subido       = $this->documento("{$tipo}_path");
+                        $subido        = $this->documento("{$tipo}_path");
+                        $seleccionado  = ${$cfg['file']};
                         $deshabilitado = $subido || !$pasoAnteriorCompleto;
                     @endphp
                     <div class="border-2 border-indigo-100 rounded-xl p-4">
@@ -807,6 +808,8 @@ new #[Layout('layouts.publico')] class extends Component {
                                 <p class="font-bold text-sm text-gray-700">{{ $cfg['label'] }}</p>
                                 @if($subido)
                                     <p class="text-xs text-green-600 font-bold">✓ Documento cargado</p>
+                                @elseif($seleccionado)
+                                    <p class="text-xs text-indigo-600 font-bold">📄 {{ $seleccionado->getClientOriginalName() }} — listo para subir</p>
                                 @elseif(!$pasoAnteriorCompleto)
                                     <p class="text-xs text-gray-400">Disponible después de agregar la inscripción</p>
                                 @else
@@ -818,6 +821,8 @@ new #[Layout('layouts.publico')] class extends Component {
                                 <label for="archivo-{{ $tipo }}"
                                     @if($deshabilitado)
                                         class="inline-flex items-center gap-2 bg-gray-100 text-gray-400 text-xs font-black px-4 py-2.5 rounded-lg cursor-not-allowed shadow-sm border-2 border-gray-200 opacity-60 pointer-events-none transition"
+                                    @elseif($seleccionado)
+                                        class="inline-flex items-center gap-2 bg-gray-200 text-gray-500 text-xs font-black px-4 py-2.5 rounded-lg cursor-pointer shadow-sm border-2 border-gray-300 opacity-70 transition"
                                     @else
                                         class="inline-flex items-center gap-2 bg-amber-400 hover:bg-amber-500 text-amber-950 text-xs font-black px-4 py-2.5 rounded-lg cursor-pointer shadow-sm border-2 border-amber-500 transition"
                                     @endif>
