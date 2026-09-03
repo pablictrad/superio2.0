@@ -17,6 +17,7 @@ use Livewire\Attributes\Computed;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use App\Support\Auditoria;
+use App\Support\TrayectoConfig;
 
 new class extends Component {
     use WithPagination;
@@ -26,9 +27,31 @@ new class extends Component {
     public string $filtroEstamento = '';
     public string $busqueda        = '';
 
+    public bool $trayectoHabilitado = true;
+
     public function mount(): void
     {
-        $this->cohorte = (int) config('trayecto.cohorte_activa');
+        $this->cohorte           = (int) config('trayecto.cohorte_activa');
+        $this->trayectoHabilitado = TrayectoConfig::habilitado();
+    }
+
+    /**
+     * Prende/apaga la inscripción pública al Trayecto Formativo (botón en la
+     * pantalla principal + acceso a /trayecto/registrar). No afecta datos ya
+     * cargados, solo si se puede seguir inscribiendo.
+     */
+    public function toggleHabilitado(): void
+    {
+        $nuevoValor = !$this->trayectoHabilitado;
+
+        TrayectoConfig::setHabilitado($nuevoValor);
+        $this->trayectoHabilitado = $nuevoValor;
+
+        Auditoria::registrar($nuevoValor ? 'habilitar_trayecto' : 'deshabilitar_trayecto', 'trayecto_config');
+
+        $this->dispatch('toast', variant: 'success', heading: 'Éxito', text: $nuevoValor
+            ? 'Inscripción al Trayecto Formativo habilitada.'
+            : 'Inscripción al Trayecto Formativo deshabilitada.');
     }
 
     public function updatingCohorte(): void { $this->resetPage(); }
@@ -154,7 +177,19 @@ new class extends Component {
 
 <div class="p-6 space-y-4">
     <div class="flex items-center justify-between flex-wrap gap-3">
-        <flux:heading size="lg">Trayecto Formativo — Inscriptos</flux:heading>
+        <div class="flex items-center gap-3">
+            <flux:heading size="lg">Trayecto Formativo — Inscriptos</flux:heading>
+            @if($trayectoHabilitado)
+                <flux:badge color="green" size="sm">Inscripción pública habilitada</flux:badge>
+            @else
+                <flux:badge color="zinc" size="sm">Inscripción pública deshabilitada</flux:badge>
+            @endif
+        </div>
+
+        <flux:button size="sm" variant="{{ $trayectoHabilitado ? 'danger' : 'primary' }}" wire:click="toggleHabilitado"
+            wire:confirm="{{ $trayectoHabilitado ? '¿Deshabilitar la inscripción pública al Trayecto Formativo? El botón dejará de verse en la pantalla principal y no se podrá inscribir nadie más hasta que lo vuelvas a habilitar.' : '¿Habilitar la inscripción pública al Trayecto Formativo?' }}">
+            {{ $trayectoHabilitado ? 'Deshabilitar inscripción pública' : 'Habilitar inscripción pública' }}
+        </flux:button>
     </div>
 
     <div class="flex flex-wrap items-end gap-3">

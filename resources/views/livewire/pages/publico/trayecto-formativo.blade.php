@@ -32,6 +32,7 @@ use Livewire\WithFileUploads;
 use Livewire\Attributes\Layout;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
+use App\Support\TrayectoConfig;
 
 new #[Layout('layouts.publico')] class extends Component {
     use WithFileUploads;
@@ -42,6 +43,9 @@ new #[Layout('layouts.publico')] class extends Component {
     public int $cohorteActiva = 2025;
 
     public string $nombreTrayecto = '';
+
+    // Flag global (tabla tb_trayecto_config) que el admin togglea desde el panel.
+    public bool $trayectoHabilitado = true;
 
     // ── Paso 1 ──────────────────────────────────────────────────────
     public string $dniBusqueda = '';
@@ -109,8 +113,9 @@ new #[Layout('layouts.publico')] class extends Component {
 
     public function mount(): void
     {
-        $this->cohorteActiva = (int) config('trayecto.cohorte_activa');
-        $this->nombreTrayecto = (string) config('trayecto.nombre');
+        $this->cohorteActiva     = (int) config('trayecto.cohorte_activa');
+        $this->nombreTrayecto    = (string) config('trayecto.nombre');
+        $this->trayectoHabilitado = TrayectoConfig::habilitado();
     }
 
     /* ═══════════════════════════════════════════════════════════════
@@ -121,6 +126,13 @@ new #[Layout('layouts.publico')] class extends Component {
         $this->mensajeErr   = '';
         $this->mensajeOk    = '';
         $this->dniBloqueado = '';
+
+        // Defensa en profundidad: la vista ya oculta el formulario si está
+        // deshabilitado, pero esto evita que se pueda invocar la acción igual.
+        if (!$this->trayectoHabilitado) {
+            $this->mensajeErr = 'La inscripción al Trayecto Formativo no está habilitada en este momento.';
+            return;
+        }
 
         $this->validate([
             'dniBusqueda' => 'required|digits_between:6,8',
@@ -261,12 +273,15 @@ new #[Layout('layouts.publico')] class extends Component {
         $niveles = config('trayecto.niveles');
 
         $this->validate([
-            'nivel'     => 'required|in:' . implode(',', $niveles),
-            'estamento' => 'required|string|max:255',
+            'nivel'         => 'required|in:' . implode(',', $niveles),
+            'estamento'     => 'required|string|max:255',
+            'institucionId' => 'required|integer|exists:tb_instituciones_trayecto,id',
         ], [
-            'nivel.required'     => 'Seleccioná un nivel.',
-            'nivel.in'           => 'Nivel inválido.',
-            'estamento.required' => 'Seleccioná un estamento.',
+            'nivel.required'         => 'Seleccioná un nivel.',
+            'nivel.in'               => 'Nivel inválido.',
+            'estamento.required'     => 'Seleccioná un estamento.',
+            'institucionId.required' => 'Seleccioná una institución de la lista de resultados.',
+            'institucionId.exists'   => 'La institución seleccionada no es válida.',
         ]);
 
         $nivelMultiple = config('trayecto.nivel_multiple');
@@ -524,6 +539,15 @@ new #[Layout('layouts.publico')] class extends Component {
         <p class="text-sm text-gray-500 mt-1">Convocatoria — Año {{ $cohorteActiva }}</p>
     </div>
 
+    @if(!$trayectoHabilitado)
+        <div class="bg-white border-2 border-gray-200 rounded-2xl p-10 text-center space-y-3">
+            <div class="text-4xl">🔒</div>
+            <h2 class="text-lg font-black text-gray-700">Inscripción no disponible</h2>
+            <p class="text-sm text-gray-500 max-w-md mx-auto">La inscripción al Trayecto Formativo no está habilitada en este momento. Volvé a intentarlo más adelante o contactate con la institución.</p>
+            <a href="{{ route('home') }}" class="inline-block text-indigo-600 font-bold text-sm pt-2">Volver a la pantalla principal</a>
+        </div>
+    @else
+
     {{-- Indicador de pasos --}}
     <div class="flex items-center justify-center gap-2 mb-8">
         @foreach (['Información', 'Datos Personales', 'Inscripción'] as $i => $etiqueta)
@@ -701,10 +725,10 @@ new #[Layout('layouts.publico')] class extends Component {
                     </div>
 
                     <div class="relative">
-                        <label class="block text-sm font-medium text-gray-700 mb-1">Institución</label>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Institución <span class="text-red-500">*</span></label>
                         <input type="text" wire:model.live.debounce.300ms="institucionBusqueda"
                             placeholder="Buscar por nombre o CUE…"
-                            class="w-full border-2 border-gray-300 rounded-xl px-3 py-2">
+                            class="w-full border-2 border-gray-300 rounded-xl px-3 py-2 @error('institucionId') border-red-400 @enderror">
 
                         @if($institucionId)
                             <p class="mt-1 text-xs text-green-600 font-bold">✓ {{ $institucionBusqueda }}</p>
@@ -720,6 +744,7 @@ new #[Layout('layouts.publico')] class extends Component {
                         @elseif(trim($institucionBusqueda) !== '')
                             <p class="mt-1 text-xs text-gray-400">Sin resultados.</p>
                         @endif
+                        @error('institucionId') <p class="mt-1 text-xs text-red-600">{{ $message }}</p> @enderror
                     </div>
 
                     <div>
@@ -883,5 +908,6 @@ new #[Layout('layouts.publico')] class extends Component {
             </div>
         </div>
         @endif
+    @endif
     @endif
 </div>

@@ -4,7 +4,11 @@ use Livewire\Volt\Volt;
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\LlamadoPdfController;
 
-Route::view('/', 'welcome')->name('home');
+Route::get('/', function () {
+    return view('welcome', [
+        'trayectoHabilitado' => \App\Support\TrayectoConfig::habilitado(),
+    ]);
+})->name('home');
 
 Route::middleware(['auth', 'verified'])->group(function () {
 
