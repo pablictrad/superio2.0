@@ -76,6 +76,11 @@ new #[Layout('layouts.publico')] class extends Component {
 
     public bool $inscripcionFinalizada = false;
 
+    // DNI que ya alcanzó el máximo de inscripciones para la convocatoria activa
+    // (bloqueado en el paso 1) — se guarda aparte para poder ofrecer la descarga
+    // de su constancia sin necesidad de re-cargar $this->dni ni $inscripciones.
+    public string $dniBloqueado = '';
+
     public array $estamentosPorNivel = [
         'Inicial' => [
             'ESTAMENTO SUPERVISOR/A',
@@ -113,8 +118,9 @@ new #[Layout('layouts.publico')] class extends Component {
     ═══════════════════════════════════════════════════════════════ */
     public function buscarDni(): void
     {
-        $this->mensajeErr = '';
-        $this->mensajeOk  = '';
+        $this->mensajeErr   = '';
+        $this->mensajeOk    = '';
+        $this->dniBloqueado = '';
 
         $this->validate([
             'dniBusqueda' => 'required|digits_between:6,9',
@@ -127,6 +133,25 @@ new #[Layout('layouts.publico')] class extends Component {
         $this->dni = $dni;
 
         $this->cargarInscripciones();
+
+        // ── Duplicados: si ya alcanzó el máximo posible de inscripciones para
+        //    esta convocatoria (2, sólo alcanzable vía Nivel Primario), no tiene
+        //    sentido continuar el wizard — se bloquea acá mismo, en el paso 1.
+        $maxAbsoluto = (int) config('trayecto.max_inscripciones_nivel_multiple');
+        if (count($this->inscripciones) >= $maxAbsoluto) {
+            $this->mensajeErr   = 'Ya posees una inscripción activa a este trayecto para la convocatoria ' . $this->cohorteActiva . '. No es posible registrar una nueva inscripción con este DNI.';
+            $this->dniBloqueado = $dni;
+            $this->dni = '';
+            $this->inscripciones = [];
+            return;
+        }
+
+        // Ya tiene 1 inscripción (posible caso Primario, que admite una segunda): se avisa
+        // pero se deja continuar — guardarInscripcion() vuelve a validar el límite exacto.
+        $maxDefault = (int) config('trayecto.max_inscripciones_default');
+        if (count($this->inscripciones) >= $maxDefault) {
+            $this->mensajeOk = 'Ya tenés una inscripción registrada para este DNI en esta convocatoria. Solo vas a poder agregar otra si corresponde a Nivel ' . config('trayecto.nivel_multiple') . '.';
+        }
 
         // Prellenar datos personales desde la inscripción más reciente de este DNI (si existe).
         $ultima = collect($this->inscripciones)->sortByDesc('id')->first();
@@ -493,11 +518,13 @@ new #[Layout('layouts.publico')] class extends Component {
         }
 
         $this->inscripcionFinalizada = true;
-        $this->mensajeOk = 'Inscripción cerrada correctamente. Ya podés descargar tu constancia.';
+        $this->mensajeOk = '';
+        $this->dispatch('inscripcion-exitosa');
     }
 }; ?>
 
-<div class="max-w-4xl mx-auto py-8 px-4">
+<div class="max-w-4xl mx-auto py-8 px-4"
+    x-on:inscripcion-exitosa.window="setTimeout(() => { window.location.href = '{{ route('home') }}' }, 8000)">
 
     <div class="text-center mb-8">
         <p class="text-xs font-bold uppercase tracking-widest text-indigo-500 mb-1">{{ $nombreTrayecto }}</p>
@@ -568,6 +595,19 @@ new #[Layout('layouts.publico')] class extends Component {
                     </button>
                 </div>
                 @error('dniBusqueda') <p class="mt-1 text-xs text-red-600 font-medium">{{ $message }}</p> @enderror
+
+                @if($dniBloqueado)
+                    <div class="text-center pt-2">
+                        <a href="{{ route('trayecto.constancia.descargar', ['dni' => $dniBloqueado, 'cohorte' => $cohorteActiva]) }}"
+                           target="_blank"
+                           class="inline-flex items-center gap-2 bg-green-600 hover:bg-green-700 text-white font-bold px-6 py-2.5 rounded-xl shadow-sm transition">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
+                                <path fill-rule="evenodd" d="M10 3a1 1 0 011 1v8.586l2.293-2.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 111.414-1.414L9 12.586V4a1 1 0 011-1zm-7 14a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1z" clip-rule="evenodd" />
+                            </svg>
+                            Descargar constancia de inscripción
+                        </a>
+                    </div>
+                @endif
             </div>
         </div>
     @endif
@@ -628,6 +668,23 @@ new #[Layout('layouts.publico')] class extends Component {
 
     {{-- ══════════════════ PASO 3 — INSCRIPCIÓN + DOCUMENTACIÓN ══════════════════ --}}
     @if($paso === 3)
+        @if($inscripcionFinalizada)
+            {{-- Cierre exitoso: se oculta todo el formulario y solo queda esta pantalla de confirmación --}}
+            <div class="bg-green-50 border-2 border-green-300 rounded-2xl p-8 text-center space-y-4">
+                <div class="text-5xl">✓</div>
+                <h2 class="text-xl font-black text-green-700">¡Inscripción exitosa!</h2>
+                <p class="text-sm text-gray-600">Tu inscripción al Trayecto Formativo quedó registrada correctamente.</p>
+                <a href="{{ route('trayecto.constancia.descargar', ['dni' => $dni, 'cohorte' => $cohorteActiva]) }}"
+                   target="_blank"
+                   class="inline-flex items-center gap-2 bg-green-600 hover:bg-green-700 text-white font-black px-8 py-4 rounded-2xl shadow-lg ring-4 ring-green-300 animate-pulse text-base transition">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                        <path fill-rule="evenodd" d="M10 3a1 1 0 011 1v8.586l2.293-2.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 111.414-1.414L9 12.586V4a1 1 0 011-1zm-7 14a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1z" clip-rule="evenodd" />
+                    </svg>
+                    Descargar constancia de inscripción
+                </a>
+                <p class="text-xs text-gray-400 pt-2">Serás redirigido a la pantalla principal en unos segundos…</p>
+            </div>
+        @else
         <div class="space-y-6">
 
             {{-- Alta de inscripción --}}
@@ -718,28 +775,52 @@ new #[Layout('layouts.publico')] class extends Component {
             </div>
 
             {{-- Documentación --}}
-            <div class="bg-white border-2 border-gray-100 rounded-2xl p-6 shadow-sm space-y-4">
-                <h3 class="font-bold text-gray-800">Subir Documentación Requerida</h3>
+            @php $pasoAnteriorCompleto = !empty($inscripciones); @endphp
+            <div class="bg-white border-2 border-gray-100 rounded-2xl p-6 shadow-sm space-y-4 {{ !$pasoAnteriorCompleto ? 'opacity-60' : '' }}">
+                <div class="flex items-center justify-between gap-2">
+                    <h3 class="font-bold text-gray-800">Subir Documentación Requerida</h3>
+                    @if(!$pasoAnteriorCompleto)
+                        <span class="inline-flex items-center gap-1 text-xs font-bold text-gray-500 bg-gray-100 px-2.5 py-1 rounded-full">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5" viewBox="0 0 20 20" fill="currentColor">
+                                <path fill-rule="evenodd" d="M10 1a4 4 0 00-4 4v2H5a2 2 0 00-2 2v7a2 2 0 002 2h10a2 2 0 002-2V9a2 2 0 00-2-2h-1V5a4 4 0 00-4-4zm2 6V5a2 2 0 10-4 0v2h4z" clip-rule="evenodd" />
+                            </svg>
+                            Bloqueado
+                        </span>
+                    @endif
+                </div>
+                @if(!$pasoAnteriorCompleto)
+                    <p class="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">Completá primero la inscripción (Nivel / Estamento) de arriba para habilitar la carga de documentos.</p>
+                @endif
 
                 @foreach([
                     'f2'                     => ['label' => 'Declaración Jurada de cargos F2', 'file' => 'archivoF2'],
                     'certificacion_servicio' => ['label' => 'Certificación de servicio actualizada', 'file' => 'archivoCertificacion'],
                     'concepto'               => ['label' => 'Concepto elevado por la institución', 'file' => 'archivoConcepto'],
                 ] as $tipo => $cfg)
+                    @php
+                        $subido       = $this->documento("{$tipo}_path");
+                        $deshabilitado = $subido || !$pasoAnteriorCompleto;
+                    @endphp
                     <div class="border-2 border-indigo-100 rounded-xl p-4">
                         <div class="flex items-center justify-between gap-4 flex-wrap">
                             <div>
                                 <p class="font-bold text-sm text-gray-700">{{ $cfg['label'] }}</p>
-                                @if($this->documento("{$tipo}_path"))
+                                @if($subido)
                                     <p class="text-xs text-green-600 font-bold">✓ Documento cargado</p>
+                                @elseif(!$pasoAnteriorCompleto)
+                                    <p class="text-xs text-gray-400">Disponible después de agregar la inscripción</p>
                                 @else
                                     <p class="text-xs text-gray-400">Sin cargar (PDF, máx. 10MB)</p>
                                 @endif
                             </div>
                             <div class="flex items-center gap-2">
-                                <input type="file" id="archivo-{{ $tipo }}" wire:model="{{ $cfg['file'] }}" accept="application/pdf" class="hidden">
+                                <input type="file" id="archivo-{{ $tipo }}" wire:model="{{ $cfg['file'] }}" accept="application/pdf" class="hidden" @disabled($deshabilitado)>
                                 <label for="archivo-{{ $tipo }}"
-                                    class="inline-flex items-center gap-2 bg-amber-400 hover:bg-amber-500 text-amber-950 text-xs font-black px-4 py-2.5 rounded-lg cursor-pointer shadow-sm border-2 border-amber-500 transition">
+                                    @if($deshabilitado)
+                                        class="inline-flex items-center gap-2 bg-gray-100 text-gray-400 text-xs font-black px-4 py-2.5 rounded-lg cursor-not-allowed shadow-sm border-2 border-gray-200 opacity-60 pointer-events-none transition"
+                                    @else
+                                        class="inline-flex items-center gap-2 bg-amber-400 hover:bg-amber-500 text-amber-950 text-xs font-black px-4 py-2.5 rounded-lg cursor-pointer shadow-sm border-2 border-amber-500 transition"
+                                    @endif>
                                     <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
                                         <path d="M9.25 13.25a.75.75 0 001.5 0V4.636l2.955 3.129a.75.75 0 001.09-1.03l-4.25-4.5a.75.75 0 00-1.09 0l-4.25 4.5a.75.75 0 101.09 1.03L9.25 4.636v8.614z" />
                                         <path d="M3.5 12.75a.75.75 0 00-1.5 0v2.5A2.75 2.75 0 004.75 18h10.5A2.75 2.75 0 0018 15.25v-2.5a.75.75 0 00-1.5 0v2.5c0 .69-.56 1.25-1.25 1.25H4.75c-.69 0-1.25-.56-1.25-1.25v-2.5z" />
@@ -747,9 +828,10 @@ new #[Layout('layouts.publico')] class extends Component {
                                     Seleccionar archivo
                                 </label>
                                 <button wire:click="subirDocumento('{{ $tipo }}')" wire:loading.attr="disabled" wire:target="{{ $cfg['file'] }},subirDocumento('{{ $tipo }}')"
-                                    class="bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold px-3 py-2 rounded-lg">Subir</button>
-                                @if($this->documento("{$tipo}_path"))
-                                    <a href="{{ Storage::url($this->documento("{$tipo}_path")) }}" target="_blank" class="text-xs font-bold text-indigo-600">Ver</a>
+                                    @disabled($deshabilitado)
+                                    class="bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold px-3 py-2 rounded-lg disabled:bg-gray-200 disabled:text-gray-400 disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:bg-gray-200">Subir</button>
+                                @if($subido)
+                                    <a href="{{ Storage::url($subido) }}" target="_blank" class="text-xs font-bold text-indigo-600">Ver</a>
                                     <button wire:click="eliminarDocumento('{{ $tipo }}')"
                                         wire:confirm="¿Eliminar este documento?"
                                         class="text-xs font-bold text-red-600">Eliminar</button>
@@ -762,20 +844,15 @@ new #[Layout('layouts.publico')] class extends Component {
             </div>
 
             {{-- Cierre de inscripción --}}
+            @php
+                $documentacionCompleta = $this->documento('f2_path') && $this->documento('certificacion_servicio_path') && $this->documento('concepto_path');
+                $puedeFinalizar        = $pasoAnteriorCompleto && $documentacionCompleta;
+            @endphp
             <div class="bg-white border-2 border-indigo-100 rounded-2xl p-6 shadow-sm">
-                @if($inscripcionFinalizada)
-                    <div class="bg-green-50 border-2 border-green-300 rounded-xl p-4 text-center space-y-3">
-                        <p class="font-bold text-green-700">✓ Inscripción cerrada correctamente.</p>
-                        <a href="{{ route('trayecto.constancia.descargar', ['dni' => $dni, 'cohorte' => $cohorteActiva]) }}"
-                           target="_blank"
-                           class="inline-block bg-green-600 hover:bg-green-700 text-white font-bold px-6 py-2.5 rounded-xl">
-                            Descargar constancia de inscripción
-                        </a>
-                    </div>
-                @else
                     <div class="text-center space-y-3">
                         <p class="text-xs text-gray-500">Una vez cargada toda la documentación obligatoria, cerrá tu inscripción para generar la constancia.</p>
                         <button
+                            @disabled(!$puedeFinalizar)
                             type="button"
                             x-on:click="
                                 const faltantes = [];
@@ -791,16 +868,19 @@ new #[Layout('layouts.publico')] class extends Component {
                                     $wire.finalizarInscripcion();
                                 }
                             "
-                            class="bg-emerald-600 hover:bg-emerald-700 text-white font-black px-8 py-3 rounded-xl shadow-sm transition">
+                            class="bg-emerald-600 hover:bg-emerald-700 text-white font-black px-8 py-3 rounded-xl shadow-sm transition disabled:bg-gray-300 disabled:cursor-not-allowed disabled:hover:bg-gray-300">
                             Inscribirme
                         </button>
+                        @if(!$puedeFinalizar)
+                            <p class="text-xs text-gray-400">Completá la inscripción y subí los 3 documentos obligatorios para habilitar este paso.</p>
+                        @endif
                     </div>
-                @endif
             </div>
 
             <div class="flex justify-start">
                 <button wire:click="volverPaso(2)" class="text-gray-500 font-bold px-4 py-2">Volver</button>
             </div>
         </div>
+        @endif
     @endif
 </div>
