@@ -123,10 +123,10 @@ new #[Layout('layouts.publico')] class extends Component {
         $this->dniBloqueado = '';
 
         $this->validate([
-            'dniBusqueda' => 'required|digits_between:6,9',
+            'dniBusqueda' => 'required|digits_between:6,8',
         ], [
             'dniBusqueda.required'       => 'Ingrese su DNI para continuar.',
-            'dniBusqueda.digits_between' => 'El DNI debe tener entre 6 y 9 dígitos.',
+            'dniBusqueda.digits_between' => 'El DNI debe tener entre 6 y 8 dígitos.',
         ]);
 
         $dni = preg_replace('/[^0-9]/', '', $this->dniBusqueda);
@@ -134,23 +134,15 @@ new #[Layout('layouts.publico')] class extends Component {
 
         $this->cargarInscripciones();
 
-        // ── Duplicados: si ya alcanzó el máximo posible de inscripciones para
-        //    esta convocatoria (2, sólo alcanzable vía Nivel Primario), no tiene
-        //    sentido continuar el wizard — se bloquea acá mismo, en el paso 1.
-        $maxAbsoluto = (int) config('trayecto.max_inscripciones_nivel_multiple');
-        if (count($this->inscripciones) >= $maxAbsoluto) {
+        // ── Duplicados: si el DNI ya tiene CUALQUIER inscripción registrada para
+        //    esta convocatoria, se bloquea acá mismo en el paso 1 (sin excepción
+        //    para Nivel Primario) y se ofrece la descarga de su constancia.
+        if (count($this->inscripciones) > 0) {
             $this->mensajeErr   = 'Ya posees una inscripción activa a este trayecto para la convocatoria ' . $this->cohorteActiva . '. No es posible registrar una nueva inscripción con este DNI.';
             $this->dniBloqueado = $dni;
             $this->dni = '';
             $this->inscripciones = [];
             return;
-        }
-
-        // Ya tiene 1 inscripción (posible caso Primario, que admite una segunda): se avisa
-        // pero se deja continuar — guardarInscripcion() vuelve a validar el límite exacto.
-        $maxDefault = (int) config('trayecto.max_inscripciones_default');
-        if (count($this->inscripciones) >= $maxDefault) {
-            $this->mensajeOk = 'Ya tenés una inscripción registrada para este DNI en esta convocatoria. Solo vas a poder agregar otra si corresponde a Nivel ' . config('trayecto.nivel_multiple') . '.';
         }
 
         // Prellenar datos personales desde la inscripción más reciente de este DNI (si existe).
@@ -584,8 +576,12 @@ new #[Layout('layouts.publico')] class extends Component {
                         type="text"
                         wire:model="dniBusqueda"
                         wire:keydown.enter="buscarDni"
-                        maxlength="9"
+                        x-on:keydown="if (!/[0-9]/.test($event.key) && !['Backspace','Delete','ArrowLeft','ArrowRight','Tab','Enter','Home','End'].includes($event.key) && !$event.metaKey && !$event.ctrlKey) { $event.preventDefault() }"
+                        x-on:input="$event.target.value = $event.target.value.replace(/[^0-9]/g, '').slice(0, 8)"
+                        x-on:paste="$event.preventDefault(); const t = (($event.clipboardData || window.clipboardData).getData('text') || '').replace(/[^0-9]/g, '').slice(0, 8); $event.target.value = t; $event.target.dispatchEvent(new Event('input'))"
+                        maxlength="8"
                         inputmode="numeric"
+                        pattern="[0-9]*"
                         placeholder="Ej: 28564343"
                         class="flex-1 border-2 border-gray-300 rounded-xl px-4 py-3 text-lg font-black text-center tracking-widest focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 transition @error('dniBusqueda') border-red-400 @enderror">
                     <button wire:click="buscarDni" wire:loading.attr="disabled" wire:target="buscarDni"
