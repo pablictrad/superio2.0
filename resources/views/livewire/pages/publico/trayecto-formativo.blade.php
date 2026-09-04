@@ -629,6 +629,10 @@ new #[Layout('layouts.publico')] class extends Component {
                     </div>
                 @endif
             </div>
+
+            <div class="flex justify-start pt-2">
+                <a href="{{ route('home') }}" class="text-gray-500 font-bold px-4 py-2 hover:text-gray-700 transition">Volver / Cerrar</a>
+            </div>
         </div>
     @endif
 
