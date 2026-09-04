@@ -714,11 +714,19 @@ new #[Layout('layouts.publico')] class extends Component {
 
                 <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
                     <div>
-                        <label class="block text-sm font-medium text-gray-700 mb-1">Nivel</label>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Niveles/Modalidad</label>
+                        @php
+                            $etiquetasNivel = [
+                                'Inicial'    => 'Nivel Inicial',
+                                'Primario'   => 'Nivel Primario',
+                                'Secundario' => 'Nivel Secundario',
+                                'Especial'   => 'Modalidad Especial',
+                            ];
+                        @endphp
                         <select wire:model.live="nivel" class="w-full border-2 border-gray-300 rounded-xl px-3 py-2 @error('nivel') border-red-400 @enderror">
                             <option value="">Seleccione…</option>
                             @foreach(config('trayecto.niveles') as $n)
-                                <option value="{{ $n }}">{{ $n }}</option>
+                                <option value="{{ $n }}">{{ $etiquetasNivel[$n] ?? $n }}</option>
                             @endforeach
                         </select>
                         @error('nivel') <p class="mt-1 text-xs text-red-600">{{ $message }}</p> @enderror

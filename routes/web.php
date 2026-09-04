@@ -84,6 +84,9 @@ Route::middleware(['auth', 'verified'])->group(function () {
 
     Volt::route('/admin/trayecto/instituciones', 'pages.admin.trayecto.gestionar-instituciones-trayecto')
         ->name('admin.trayecto.instituciones');
+
+    Route::get('/admin/trayecto/pdf', [App\Http\Controllers\TrayectoPdfController::class, 'generar'])
+        ->name('admin.trayecto.pdf');
 });
  
 // PUBLICAS

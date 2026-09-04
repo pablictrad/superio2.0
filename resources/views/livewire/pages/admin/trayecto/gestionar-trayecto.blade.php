@@ -186,10 +186,20 @@ new class extends Component {
             @endif
         </div>
 
-        <flux:button size="sm" variant="{{ $trayectoHabilitado ? 'danger' : 'primary' }}" wire:click="toggleHabilitado"
-            wire:confirm="{{ $trayectoHabilitado ? '¿Deshabilitar la inscripción pública al Trayecto Formativo? El botón dejará de verse en la pantalla principal y no se podrá inscribir nadie más hasta que lo vuelvas a habilitar.' : '¿Habilitar la inscripción pública al Trayecto Formativo?' }}">
-            {{ $trayectoHabilitado ? 'Deshabilitar inscripción pública' : 'Habilitar inscripción pública' }}
-        </flux:button>
+        <div class="flex items-center gap-2">
+            <flux:button
+                href="{{ route('admin.trayecto.pdf', array_filter(['cohorte' => $cohorte, 'nivel' => $filtroNivel, 'estamento' => $filtroEstamento, 'busqueda' => $busqueda])) }}"
+                target="_blank"
+                size="sm"
+                icon="arrow-down-tray">
+                Descargar PDF
+            </flux:button>
+
+            <flux:button size="sm" variant="{{ $trayectoHabilitado ? 'danger' : 'primary' }}" wire:click="toggleHabilitado"
+                wire:confirm="{{ $trayectoHabilitado ? '¿Deshabilitar la inscripción pública al Trayecto Formativo? El botón dejará de verse en la pantalla principal y no se podrá inscribir nadie más hasta que lo vuelvas a habilitar.' : '¿Habilitar la inscripción pública al Trayecto Formativo?' }}">
+                {{ $trayectoHabilitado ? 'Deshabilitar inscripción pública' : 'Habilitar inscripción pública' }}
+            </flux:button>
+        </div>
     </div>
 
     <div class="flex flex-wrap items-end gap-3">
